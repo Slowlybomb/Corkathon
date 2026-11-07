@@ -1,7 +1,7 @@
 param(
     [int]$Patches = 100000,
     [int]$Dates = 4,
-    [int]$Years = 1,
+    [int]$Years = 2,
     [switch]$SkipTrain,
     [switch]$SkipScene
 )
@@ -20,5 +20,7 @@ if (-not $SkipTrain) {
 if (-not $SkipScene) {
     & $cy src\agri\calibrate.cy --jit main --arg 542080 --arg 5767280 --arg 48
     & $cy src\agri\scene.cy --jit main --arg 550720 --arg 5758640 --arg 12
+    & $cy src\agri\fastrun.cy --jit main --arg 550720 --arg 5758640 --arg 2 --arg 288 --arg 0
+    & $cy src\agri\fastrun.cy --jit main --arg 550720 --arg 5758640 --arg 1 --arg 32 --arg 1
 }
 "pipeline finished in {0:N1} minutes" -f ((Get-Date) - $t).TotalMinutes

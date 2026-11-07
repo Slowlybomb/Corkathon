@@ -10,21 +10,21 @@ Open http://localhost:5173. No installation or build step is required. Internet 
 
 The map starts at **latitude 51.949961, longitude -8.220098**. The exact supplied corners and UTM29N references are in [DEMO_AREA.md](../docs/DEMO_AREA.md) and `geo.mjs`.
 
-The workspace opens empty. Use **Camera module** to connect the Android companion, or **Data source** to choose a satellite scene package, WebSocket observation feed, or optional illustrative sample survey. Replay and synthetic analysis appear only with the sample survey.
+The workspace opens empty. Use **Camera module** to connect the Android companion, or **Data source** to choose a satellite scene package or WebSocket observation feed. The map contains no placeholder field boundary, generated findings, or simulated route.
 
 ## Controls
 
-- Use the floating **Map / Satellite** switch. Satellite is the default and uses Esri World Imagery. Switching preserves camera, findings, replay, and Three.js state. Failed imagery requests return to Map with a notice.
+- Use the floating **Map / Satellite** switch. Satellite is the default and uses Esri World Imagery. Switching preserves camera, findings, and Three.js state. Failed imagery requests return to Map with a notice.
 
 - Switch between flat 2D and pitched 3D. MapLibre controls the map; an interleaved deck.gl layer renders analysis cells and a Three.js WebGL custom layer renders the drone.
-- Drag to pan, right-drag or Ctrl-drag to rotate/tilt, scroll or use buttons to zoom, and Fit to show the survey extent. Touch navigation uses MapLibre's native gestures.
-- Select findings on the map or in the accessible list. Export from the observations heading. The sample survey adds playback, scrubbing, and replay speed controls.
-- Open **Data source** for a satellite scene package, observation feed, or sample survey. The feed opens a real WebSocket and reports connection and error states.
+- Drag to pan, right-drag or Ctrl-drag to rotate/tilt, scroll or use buttons to zoom, and Fit to show the loaded scene or received observations. Touch navigation uses MapLibre's native gestures.
+- Select findings on the map or in the accessible list. Export from the observations heading.
+- Open **Data source** for a satellite scene package or observation feed. The feed opens a real WebSocket and reports connection and error states.
 - Open **Camera module** for the Android companion's actual Bluetooth connection, status, logs, and requested still images. Follow [PHONE_LINK.md](../docs/PHONE_LINK.md) for the APK and connection steps. No model or continuous video runs yet.
-- Enable **Share GPS and orientation** in the phone app to position the drone from its satellite fix and rotate it from the mounted phone's orientation sensor. The panel shows coordinates, accuracy, GPS altitude, ground speed, heading and tilt. **Locate drone** recentres the map. Readings expire and disconnect clears the marker; they never fall back to the sample route. Fresh GPS can also accompany camera evidence. Mounting assumes screen up and top edge forward. GPS altitude is WGS84 ellipsoid altitude, not height above ground.
+- Enable **Share GPS and orientation** in the phone app to position the drone from its satellite fix and rotate it from the mounted phone's orientation sensor. The panel shows coordinates, accuracy, GPS altitude, ground speed, heading and tilt. **Locate drone** recentres the map. Readings expire and disconnect clears the marker; they never fall back to an invented position. Fresh GPS can also accompany camera evidence. Mounting assumes screen up and top edge forward. GPS altitude is WGS84 ellipsoid altitude, not height above ground.
 - The floating **Drone telemetry** bar keeps pitch, roll, heading, GPS, and the 3D attitude view visible while connected. The attitude view works without a GPS fix; map placement requires GPS. Both models follow the same reported angles: zero pitch/roll is level, positive Android pitch is nose-down, and positive roll banks right. Version 0.4 of the APK sends up to five updates per second at normal Bluetooth speed.
 - In **3D**, zoom out to see the globe. MapLibre smoothly returns to Mercator at field scale; local Three.js meshes render once that transition completes. **2D** stays flat. Both basemaps use the selected projection.
-- The owner's [textured drone model](assets/drone/README.md) loads only when a survey route is present, keeping its 5.3 MB download out of empty startup. Its `hover` animation follows replay time, including pause and scrubbing; reduced motion fixes its pose. Display size, altitude, and route remain illustrative. The position dot works in 2D, on the globe, and if model loading fails.
+- The owner's [textured drone model](assets/drone/README.md) loads on demand for real phone GPS/attitude. The geographic model requires both readings; the separate attitude view works without GPS. Rotor motion is held still. Display size is exaggerated for visibility. The position dot works in 2D, on the globe, and if model loading fails.
 
 The page does not scroll. Long floating panels scroll internally; on compact screens, layers and observations initially collapse.
 
@@ -32,11 +32,11 @@ Resize Field layers from its upper-right grip, and Observations, Camera module, 
 
 ## Field analysis
 
-Load **Data source → Sample survey** to inspect the optional hexagonal sample layer. The default workspace stays empty until data arrives. Surface/Columns, opacity, cell/display diameter, and height-scale controls are inside Field layers. Hover or tap cells for values, or use the previous/next buttons for keyboard inspection. Zoom in to at least level 9 for the analysis layer; the global globe view remains available.
+Load a satellite package or numeric observations to inspect the analysis layer. The workspace stays empty until data arrives. Observation layer choices come from the received data. Surface/Columns, opacity, display diameter, and height-scale controls are inside Field layers. Hover or tap cells for values, or use the previous/next buttons for keyboard inspection. Zoom in to at least level 9 for the analysis layer; the global globe view remains available.
 
 Received findings may optionally contain a numeric `value`, `metric`, and `unit`. Observations without a numeric value remain point findings. Different metrics/units are not combined into one scale. Live points use an illustrative display radius rather than an inferred field-wide surface. See [HEATMAP_DATA.md](../docs/HEATMAP_DATA.md) for temporary examples, not a required model schema.
 
-`analysis.mjs` prepares values; `analysis-layer.mjs` owns the deck.gl MapLibreOverlay and ColumnLayer. Reuse these modules when the AI output arrives. Display heights and normalized colours are visual encodings, not terrain or agronomic validation.
+`analysis.mjs` prepares values; `analysis-layer.mjs` owns the deck.gl MapLibreOverlay and ColumnLayer. Both satellite and received numeric values use these modules. Display heights and normalized colours are visual encodings, not terrain or agronomic validation.
 
 ## Satellite scene exports
 
@@ -62,9 +62,9 @@ After a requested JPEG arrives over Bluetooth, its latest still and capture time
 
 ## Data and module reuse
 
-`sample-data.mjs` holds the optional six hand-authored findings and simulated route. Edit freely: this is not an integration schema. `geo.mjs` contains supplied coordinates, temporary sample-grid placement, and the permissive feed adapter. `survey.mjs` retains replay/filter logic. `map.mjs` owns the MapLibre/Three.js bridge; `app.mjs` coordinates the UI.
+`geo.mjs` preserves the supplied reference coordinates, converts scene UTM positions, derives fitting bounds from loaded data, and adapts geographic observations. The reference extent is not drawn as a field boundary. `survey.mjs` shares filtering and selection logic. `map.mjs` owns the MapLibre/Three.js bridge; `app.mjs` coordinates the UI.
 
-The feed accepts an array, `{findings: [...]}`, `{observations: [...]}`, or one observation. Positions may use longitude/latitude, lon/lat, lng/lat, `coordinates: [lon,lat]`, or those fields inside `position`. Legacy x/y samples still work. Text is escaped, malformed messages retain previous observations, and results remain unvalidated.
+The feed accepts an array, `{findings: [...]}`, `{observations: [...]}`, or one observation. Positions may use longitude/latitude, lon/lat, lng/lat, `coordinates: [lon,lat]`, or those fields inside `position`. Positions without geographic coordinates, including retired sample-grid x/y records, are rejected. Text is escaped, malformed messages retain previous observations, and results remain unvalidated.
 
 ```json
 {"observations":[{"label":"Patch to inspect","latitude":51.949961,"longitude":-8.220098,"description":"Review the source image."}]}
@@ -72,7 +72,7 @@ The feed accepts an array, `{findings: [...]}`, `{observations: [...]}`, or one 
 
 No feed server is included. Configure ws:// or wss:// when the AI teammate has one; HTTPS requires wss://. Settings are session-only.
 
-Map uses OpenFreeMap; Satellite uses Esri World Imagery satellite/aerial tiles, with source attribution visible. Imagery capture dates and resolution vary by location; it is not live drone footage. Provider terms apply: https://goto.arcgisonline.com/maps/World_Imagery. No terrain elevation model is enabled. The analysis columns, drone size and altitude, and replay are illustrative. Received observations clear the sample route, drone position, and synthetic analysis surface. Map attribution remains visible.
+Map uses OpenFreeMap; Satellite uses Esri World Imagery satellite/aerial tiles, with source attribution visible. Imagery capture dates and resolution vary by location; it is not live drone footage. Provider terms apply: https://goto.arcgisonline.com/maps/World_Imagery. No terrain elevation model is enabled. Analysis-column heights and display diameters are visual scales. Drone size is exaggerated; altitude and pose use available phone readings. No synthetic surface, route, or fallback position is generated. Map attribution remains visible.
 
 ## Checks
 
@@ -88,4 +88,4 @@ CHROME=/path/to/chrome node scripts/check-panels.mjs
 
 The browser check needs internet access for the map libraries and exercises mouse, touch, a second finger, keyboard resizing, reset, collapse, anchors, and viewport bounds. It also loads a labelled satellite fixture, switches soil layers, checks failed-load retention, and transfers a still through the Bluetooth radio double. Screenshots are written to the system temporary directory. Fixtures and radio doubles do not validate the AI model or physical hardware.
 
-The Node checks cover geographic placement, malformed feeds, replay, filtering, camera module packets, the packaged drone asset, and analysis data/controller behavior. Chromium checks verified empty startup, optional sample playback, received-observation transitions, 2D/3D switching, and viewport bounds at 1440 × 960 and 390 × 844. The integrated analysis layer was visually reviewed. Physical Bluetooth and camera operation require a camera module.
+The Node checks cover geographic placement, malformed feeds, filtering, camera module packets, the packaged drone asset, and analysis data/controller behavior. Chromium checks verified empty startup without a dummy border, received-observation transitions, 2D/3D switching, and viewport bounds at 1440 × 960 and 390 × 844. The integrated analysis layer was visually reviewed. Physical Bluetooth and camera operation require a camera module.

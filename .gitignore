@@ -1,6 +1,14 @@
+<<<<<<< HEAD
 *.exe
 !century/bin/century.exe
 out/
 data/*
 !data/eeg_eye.bin
 check_*.cy
+=======
+android/.gradle/
+android/**/build/
+android/local.properties
+*.jks
+*.keystore
+>>>>>>> feat/field-dashboard

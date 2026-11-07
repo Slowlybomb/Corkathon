@@ -20,6 +20,11 @@ The AI and dashboard assignments are confirmed by the project owner. The third t
 
 ## Collaboration
 
+- Read [DESIGN.md](DESIGN.md) before changing dashboard UI. It records the user's fixed palette, fullscreen map, floating modules, 2D/3D views, and no-page-scroll requirement. It supersedes conflicting earlier visual proposals.
+- Before creating a UI module, inspect the existing renderer, replay/filter helpers, floating-panel styles, disclosure behaviour, and buttons. Reuse or extend these first.
+- The user selected deck.gl for the field heatmap. Reuse `analysis.mjs` for value preparation and `analysis-layer.mjs` for the shared MapLibre overlay. Three.js remains responsible for the drone model. Keep model input adaptation flexible; show no synthetic heatmap for live observations without numeric values.
+- The user selected MapLibre + Three.js. Use the real WebGL custom layer, not Canvas2D projection. The demo centre is latitude 51.949961, longitude -8.220098; preserve the supplied extent in `dashboard/geo.mjs` and `docs/DEMO_AREA.md`. Keep the approved palette and floating fullscreen-map layout.
+
 - Codex should focus implementation on the web app and dashboard. Claude's AI work is owned by the AI teammate; coordinate changes across these areas with their owner.
 - Preserve concurrent work by other teammates and agents. Do not overwrite or revert their changes to make the workspace match an earlier state.
 - Before integrating AI results, agree on an example result format, available findings, timestamps, location information if available, and how unavailable or failed analysis is represented. Agree on the delivery method during technical planning.

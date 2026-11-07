@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#2c6e49"><title>Ithir · Field workspace</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.6.2/dist/maplibre-gl.css">
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}</script>
+  <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5.6.2/dist/maplibre-gl.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/deck.gl@9.4.1/dist.min.js" defer></script>
+</head>
+<body>
+  <svg class="icon-definitions" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
+    <symbol id="i-field" viewBox="0 0 24 24"><path d="m3 7 9-4 9 4v10l-9 4-9-4zM3 7l9 4 9-4M12 11v10"/></symbol>
+    <symbol id="i-target" viewBox="0 0 24 24"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/><circle cx="12" cy="12" r="4"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="m3 8 9-5 9 5-9 5zM3 12l9 5 9-5M3 16l9 5 9-5"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0Z"/><circle cx="12" cy="10" r="2"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  </defs></svg>
+  <main class="field-workspace" aria-label="Field survey workspace">
+    <div id="map" aria-label="Cork survey map"></div>
+    <p id="map-notice" class="map-notice floating-surface" role="status">Loading geographic map…</p>
+    <header class="toolbar floating-surface">
+      <a href="./" class="brand" aria-label="Ithir home"><svg class="icon"><use href="#i-field"/></svg><span>Ithir</span></a>
+      <span class="toolbar-divider"></span>
+      <div class="field-context"><h1>Cork survey area</h1><span id="survey-context">No survey loaded</span></div>
+      <button id="phone-toggle" class="button connection-toggle" popovertarget="phone-panel"><span class="status-dot" id="phone-dot"></span>Camera module</button>
+      <button id="connection-toggle" class="button connection-toggle" aria-expanded="false" aria-controls="connection-panel"><span class="status-dot" id="connection-dot"></span><span id="connection-label">Data source</span><svg class="icon"><use href="#i-settings"/></svg></button>
+    </header>
+    <section id="connection-panel" class="floating-surface setup-panel" data-resize="sw" aria-labelledby="setup-title" hidden>
+      <div class="panel-heading"><h2 id="setup-title">Data source</h2><button class="icon-button close-panel" aria-label="Close connection setup">×</button></div>
+      <form id="connection-form">
+        <label for="source">Data source</label><select id="source"><option value="" disabled selected>Choose a source</option><option value="live">Observation feed</option><option value="demo">Sample survey · illustrative</option></select>
+        <div id="endpoint-fields" hidden><label for="endpoint">WebSocket address</label><input id="endpoint" type="url" disabled placeholder="ws://192.168.1.10:8080" autocomplete="off"><small>Use wss:// when this page is served over HTTPS.</small></div>
+        <p id="connection-status" class="connection-status" role="status">Connect a camera module over Bluetooth, or choose an observation feed.</p>
+        <button class="button primary" type="submit">Load source</button>
+      </form>
+    </section>
+    <section id="phone-panel" popover="auto" class="floating-surface phone-panel" data-resize="sw" aria-labelledby="phone-title">
+      <div class="panel-heading"><h2 id="phone-title">Camera module</h2><button class="icon-button" popovertarget="phone-panel" popovertargetaction="hide" aria-label="Close camera module">×</button></div>
+      <div class="phone-content">
+        <p id="phone-status" role="status">Disconnected. Start Bluetooth in the Android app.</p>
+        <form id="phone-form">
+          <label for="phone-pin">Camera module connection code</label>
+          <input id="phone-pin" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" minlength="6" autocomplete="off" required placeholder="Six digits from the module">
+          <div class="phone-actions"><button id="phone-connect" class="button primary" type="submit">Connect Bluetooth</button><button id="phone-disconnect" class="button" type="button" disabled>Disconnect</button></div>
+        </form>
+        <p id="phone-support" class="phone-note">Bluetooth LE · Chrome on localhost or HTTPS.</p>
+        <dl class="phone-readings"><div><dt>Camera</dt><dd id="phone-camera">Unknown</dd></div><div><dt>Model</dt><dd id="phone-model">Not connected</dd></div><div><dt>Battery</dt><dd id="phone-battery">Unknown</dd></div><div><dt>Link</dt><dd id="phone-link-mode">Bluetooth LE</dd></div></dl>
+        <div class="phone-actions"><button id="phone-ping" class="button" disabled>Test connection</button><button id="phone-capture" class="button primary" disabled>Request image</button><button id="phone-stop" class="button" disabled>Stop camera</button></div>
+        <p id="phone-request-status" class="phone-note" role="status">Capture starts only when requested and allowed on the camera module.</p>
+        <figure id="phone-image-wrap" hidden><img id="phone-image" alt="Requested camera module capture"><figcaption id="phone-image-caption"></figcaption></figure>
+        <details><summary>Connection log</summary><ol id="phone-log" class="phone-log" aria-label="Camera module connection log"></ol></details>
+      </div>
+    </section>
+    <div id="basemap-switch" class="basemap-switch view-switch floating-surface" role="group" aria-label="Basemap">
+      <button data-basemap="map" aria-pressed="false">Map</button>
+      <button data-basemap="satellite" class="active" aria-pressed="true">Satellite</button>
+    </div>
+    <section class="floating-surface layers-panel" data-resize="ne" hidden aria-labelledby="layer-title">
+      <div class="panel-heading"><h2 id="layer-title"><svg class="icon"><use href="#i-layers"/></svg>Field layers</h2><button id="layers-toggle" class="icon-button" aria-expanded="true" aria-controls="layer-content" aria-label="Collapse field layers"><svg class="icon"><use href="#i-chevron"/></svg></button></div>
+      <div id="layer-content">
+        <div id="layers" class="layer-options" role="group" aria-label="Analysis layer">
+          <button data-layer="all" class="layer-option active" aria-pressed="true"><span class="layer-swatch all-swatch"></span>All observations<span class="layer-check">✓</span></button>
+          <button data-layer="coverage" class="layer-option" aria-pressed="false"><span class="layer-swatch coverage-swatch"></span>Vegetation cover</button>
+          <button data-layer="moisture" class="layer-option" aria-pressed="false"><span class="layer-swatch moisture-swatch"></span>Possible wet areas</button>
+          <button data-layer="anomalies" class="layer-option" aria-pressed="false"><span class="layer-swatch variation-swatch"></span>Ground variations</button>
+        </div>
+        <div class="analysis-controls" hidden>
+          <div class="analysis-title"><span id="analysis-metric">Awaiting model values</span><span id="analysis-kind" class="analysis-badge">No data</span></div>
+          <div id="analysis-style" class="view-switch analysis-style" role="group" aria-label="Analysis display"><button data-analysis-mode="surface" aria-pressed="false">Surface</button><button class="active" data-analysis-mode="columns" aria-pressed="true">Columns</button></div>
+          <label class="analysis-slider" for="analysis-opacity"><span>Opacity <output id="opacity-output">76%</output></span><input id="analysis-opacity" type="range" min="10" max="100" value="76"></label>
+          <label class="analysis-slider" for="analysis-size"><span><span id="analysis-size-label">Cell diameter</span> <output id="size-output">160 m</output></span><input id="analysis-size" type="range" min="40" max="320" step="20" value="160"></label>
+          <label class="analysis-slider" for="analysis-height"><span>Height scale <output id="height-output">1×</output></span><input id="analysis-height" type="range" min="25" max="300" step="25" value="100"></label>
+        </div>
+        <div class="legend" hidden><div class="legend-scale"></div><div class="legend-labels"><span id="analysis-min">—</span><span id="analysis-unit">No data</span><span id="analysis-max">—</span></div><p id="legend-note">Awaiting numeric model data.</p><div class="analysis-footer"><span id="analysis-count">0 cells</span><div class="cell-navigation" role="group" aria-label="Inspect analysis cells"><button id="cell-previous" class="icon-button" aria-label="Inspect previous cell">‹</button><button id="cell-next" class="icon-button" aria-label="Inspect next cell">›</button></div></div><p id="cell-readout" role="status">Hover, tap, or use arrows to inspect cells.</p></div>
+      </div>
+    </section>
+    <section class="floating-surface observations-panel" data-resize="sw" aria-labelledby="observations-title">
+      <div class="panel-heading"><h2 id="observations-title">Observations <span class="count" id="finding-count">0</span></h2><button id="export" class="icon-button" aria-label="Export findings" title="Export findings" disabled><svg class="icon"><use href="#i-download"/></svg></button><button id="observations-toggle" class="icon-button" aria-expanded="true" aria-controls="observations-content" aria-label="Collapse observations"><svg class="icon"><use href="#i-chevron"/></svg></button></div>
+      <div id="observations-content"><div id="finding-list" class="finding-list" aria-label="Survey findings"></div><div id="finding-detail" class="finding-detail" aria-live="polite"></div></div>
+    </section>
+    <nav class="map-tools" aria-label="Map controls">
+      <div class="view-switch floating-surface" role="group" aria-label="Map projection"><button id="view-2d" aria-pressed="false">2D</button><button id="view-3d" class="active" aria-pressed="true">3D</button></div>
+      <div class="zoom-tools floating-surface"><button id="zoom-in" class="icon-button" aria-label="Zoom in">+</button><button id="zoom-out" class="icon-button" aria-label="Zoom out">−</button><span></span><button id="fit" class="icon-button" aria-label="Fit field"><svg class="icon"><use href="#i-target"/></svg></button></div>
+    </nav>
+    <section class="floating-surface replay-panel" hidden aria-label="Survey replay controls">
+      <button id="play" class="play-button" aria-label="Play survey"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 11 7-11 7z" fill="currentColor"/></svg></button>
+      <div class="replay-title"><strong>Survey replay</strong><span class="map-mode">Paused · simulated route</span></div>
+      <div class="timeline-wrap"><input id="timeline" type="range" min="0" max="150" step="0.1" value="0" aria-label="Survey replay position"><div class="timeline-labels"><time id="elapsed">00:00</time><span id="reached">0 of 6 reached</span><time id="duration">02:30</time></div></div>
+      <button id="speed" class="button speed-button" aria-label="Playback speed, 1 times">1×</button>
+    </section>
+    <footer class="map-credit"><span id="source-credit">No survey loaded</span></footer>
+    <div id="analysis-tooltip" class="analysis-tooltip floating-surface" aria-hidden="true" hidden></div>
+    <div id="toast" class="toast floating-surface" role="status" hidden></div>
+  </main>
+  <script type="module" src="panels.mjs"></script>
+  <script type="module" src="phone-panel.mjs"></script>
+  <script type="module">
+    import('./app.mjs').catch(error => {
+      const notice=document.querySelector('#map-notice');
+      notice.hidden=false;
+      notice.textContent='Map libraries could not load. Check internet access and reload this page.';
+      console.error(error);
+    });
+  </script>
+</body>
+</html>

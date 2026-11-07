@@ -1,0 +1,113 @@
+import {spawn} from 'node:child_process';
+import {createServer} from 'node:http';
+import {readFile,writeFile,mkdtemp,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {fileURLToPath} from 'node:url';
+import {extname,resolve} from 'node:path';
+import assert from 'node:assert/strict';
+
+const root=fileURLToPath(new URL('../dashboard',import.meta.url));
+const profile=await mkdtemp(resolve(tmpdir(),'ithir-panel-check-'));
+const executable=process.env.CHROME??'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const server=createServer(async(req,res)=>{try{const name=decodeURIComponent(new URL(req.url,'http://localhost').pathname);const file=resolve(root,'.'+(name==='/'?'/index.html':name));if(!file.startsWith(root+'/'))throw new Error();res.setHeader('Content-Type',({'.html':'text/html','.mjs':'text/javascript','.css':'text/css'})[extname(file)]??'application/octet-stream');res.end(await readFile(file));}catch{res.writeHead(404);res.end();}});
+await new Promise(done=>server.listen(0,'127.0.0.1',done));
+const port=server.address().port;
+const chrome=spawn(executable,['--headless=new','--no-first-run','--no-default-browser-check','--remote-debugging-port=0','--user-data-dir='+profile,'--enable-unsafe-swiftshader','about:blank'],{stdio:['ignore','ignore','pipe']});
+let socket;
+try{
+  const endpoint=await new Promise((done,reject)=>{let output='';const timer=setTimeout(()=>reject(new Error('Chrome launch timed out '+output)),15000);chrome.stderr.on('data',data=>{output+=data;const match=output.match(/DevTools listening on (ws:\/\/[^\s]+)/);if(match){clearTimeout(timer);done(match[1]);}});chrome.on('exit',(code,signal)=>reject(new Error('Chrome exited '+code+' '+signal+' '+output)));});
+  socket=new WebSocket(endpoint);await new Promise(done=>socket.onopen=done);
+  let seq=0;const pending=new Map(),events=[];
+  socket.onmessage=event=>{const value=JSON.parse(event.data);if(value.id){const p=pending.get(value.id);pending.delete(value.id);if(value.error)p.reject(new Error(JSON.stringify(value.error)));else p.done(value.result);}else events.push(value);};
+  const command=(method,params={},sessionId)=>new Promise((done,reject)=>{const id=++seq;pending.set(id,{done,reject});socket.send(JSON.stringify({id,method,params,...(sessionId?{sessionId}:{})}));});
+  const target=await command('Target.createTarget',{url:'about:blank'});
+  const {sessionId}=await command('Target.attachToTarget',{targetId:target.targetId,flatten:true});
+  const c=(method,params)=>command(method,params,sessionId);
+  const evaluate=async(expression)=>{const r=await c('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});if(r.exceptionDetails)throw new Error(JSON.stringify(r.exceptionDetails));return r.result.value;};
+  await c('Page.enable');await c('Runtime.enable');await c('Network.enable');
+
+
+  const until=async(expression,label)=>{const end=Date.now()+45000;while(Date.now()<end){if(await evaluate('Boolean('+expression+')'))return;await new Promise(r=>setTimeout(r,100));}throw new Error('Timed out: '+label);};
+  const box=selector=>evaluate(`document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect().toJSON()`);
+  const click=selector=>evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`);
+  const near=(actual,expected,label)=>assert.ok(Math.abs(actual-expected)<2,`${label}: ${actual} vs ${expected}`);
+  const key=async selector=>{
+    await evaluate(`document.querySelector(${JSON.stringify(selector)}).focus()`);
+    return async (name,shift=false)=>{await c('Input.dispatchKeyEvent',{type:'keyDown',key:name,code:name,modifiers:shift?8:0});await c('Input.dispatchKeyEvent',{type:'keyUp',key:name,code:name});};
+  };
+  const drag=async(selector,dx,dy,touch=false)=>{
+    const handle=await box(selector),x=handle.x+handle.width/2,y=handle.y+handle.height/2;
+    if(touch){
+      await c('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y,id:1}]});
+      const parent=selector.replace(' .panel-resize',''),before=await box(parent);
+      await c('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y,id:1},{x:30,y:790,id:2}]});
+      await c('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x,y,id:1},{x:50,y:770,id:2}]});
+      near((await box(parent)).width,before.width,'A second finger must not resize the panel');
+      near((await box(parent)).height,before.height,'A second finger must not change height');
+      // CDP touchEnd ends the gesture; exercise an unrelated release separately.
+      await evaluate(`window.dispatchEvent(new PointerEvent('pointerup',{pointerId:999}))`);
+    }
+    else {await c('Input.dispatchMouseEvent',{type:'mouseMoved',x,y});await c('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',buttons:1,clickCount:1,x,y});}
+    await new Promise(r=>setTimeout(r,40));
+    for(let step=1;step<=4;step++){
+      await new Promise(r=>setTimeout(r,25));
+      const point={x:x+dx*step/4,y:y+dy*step/4};
+      if(touch)await c('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{...point,id:1},{x:50,y:770,id:2}]});
+      else await c('Input.dispatchMouseEvent',{type:'mouseMoved',buttons:1,...point});
+    }
+    if(touch)await c('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+    else await c('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',buttons:0,clickCount:1,x:x+dx,y:y+dy});
+  };
+  await c('Emulation.setDeviceMetricsOverride',{width:1440,height:960,deviceScaleFactor:1,mobile:false});
+  await c('Page.navigate',{url:`http://localhost:${port}/`});
+  await until(`document.querySelector('#play')?.dataset.playing && document.querySelectorAll('.panel-resize').length===4`,'app and resize controls');
+  assert.equal((await box('#phone-panel')).height,0,'Closed camera popover must stay hidden');
+  const original=await box('.observations-panel');
+  await drag('.observations-panel .panel-resize',-90,100);
+  let resized=await box('.observations-panel');
+  near(resized.width,original.width+90,'Mouse changes width');near(resized.height,original.height+100,'Mouse changes height');
+  near(resized.right,original.right,'Observation right anchor');near(resized.top,original.top,'Observation top anchor');
+  await click('#observations-toggle');
+  assert.ok((await box('.observations-panel')).height<100,'Collapse overrides explicit height');
+  assert.equal(await evaluate(`getComputedStyle(document.querySelector('.observations-panel .panel-resize')).display`),'none');
+  await click('#observations-toggle');near((await box('.observations-panel')).height,resized.height,'Expansion restores chosen height');
+  let press=await key('.observations-panel .panel-resize');
+  await press('ArrowRight');near((await box('.observations-panel')).width,resized.width-16,'Keyboard moves anchored edge');
+  await press('ArrowLeft',true);near((await box('.observations-panel')).width,resized.width+24,'Shift takes larger steps');
+  await press('Home');near((await box('.observations-panel')).width,original.width,'Home restores default size');
+  await click('#phone-toggle');
+  let before=await box('#phone-panel');await drag('#phone-panel .panel-resize',-60,30);
+  resized=await box('#phone-panel');near(resized.width,before.width+60,'Camera popover resizes');near(resized.right,before.right,'Camera right anchor');
+  await click('#connection-toggle');assert.equal((await box('#phone-panel')).height,0);
+  before=await box('#connection-panel');await drag('#connection-panel .panel-resize',-70,70);
+  resized=await box('#connection-panel');near(resized.width,before.width+70,'Source panel resizes');near(resized.height,before.height+70,'Source panel height');
+  await evaluate(`document.querySelector('#source').value='demo';document.querySelector('#source').dispatchEvent(new Event('change'));document.querySelector('#connection-form').requestSubmit()`);
+  await until(`document.querySelector('#finding-count').textContent==='6'`,'sample for layer controls');
+  before=await box('.layers-panel');await drag('.layers-panel .panel-resize',80,100);
+  resized=await box('.layers-panel');near(resized.width,before.width+80,'Layer width');near(resized.height,before.height-100,'Layer shrinks from upper edge');
+  near(resized.bottom,before.bottom,'Layer bottom anchor');near(resized.left,before.left,'Layer left anchor');
+  await click('#layers-toggle');assert.ok((await box('.layers-panel')).height<100);
+  await click('#layers-toggle');near((await box('.layers-panel')).height,resized.height,'Layer expansion restores height');
+  press=await key('.observations-panel .panel-resize');
+  for(let i=0;i<30;i++){await press('ArrowLeft',true);await press('ArrowDown',true);}
+  resized=await box('.observations-panel');assert.ok(resized.left>=12&&resized.bottom<=936,'Enlargement stays in viewport');
+  near(resized.width,640,'Maximum panel width');
+  for(let i=0;i<30;i++){await press('ArrowRight',true);await press('ArrowUp',true);}
+  resized=await box('.observations-panel');near(resized.width,240,'Minimum width keeps observation header controls visible');near(resized.height,160,'Minimum readable height');
+  const shot=await c('Page.captureScreenshot',{format:'png'});await writeFile(resolve(tmpdir(),'ithir-panels-desktop.png'),Buffer.from(shot.data,'base64'));
+  await click('#phone-toggle');
+  await c('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:false});
+  await new Promise(r=>setTimeout(r,150));
+  await c('Emulation.setTouchEmulationEnabled',{enabled:true});
+  before=await box('#phone-panel');await drag('#phone-panel .panel-resize',40,-60,true);
+  resized=await box('#phone-panel');near(resized.width,before.width-40,'Touch changes width');near(resized.height,before.height-60,'Touch changes height');
+  near(resized.right,before.right,'Touch retains right anchor');
+  await c('Emulation.setDeviceMetricsOverride',{width:320,height:600,deviceScaleFactor:1,mobile:false});
+  await new Promise(r=>setTimeout(r,150));
+  resized=await box('#phone-panel');assert.ok(resized.left>=12&&resized.right<=308&&resized.bottom<=576,'Viewport shrink clamps panel');
+  const page=await evaluate(`({width:innerWidth,height:innerHeight,scrollWidth:document.documentElement.scrollWidth,scrollHeight:document.documentElement.scrollHeight})`);
+  assert.equal(page.scrollWidth,page.width);assert.equal(page.scrollHeight,page.height);
+  const mobileShot=await c('Page.captureScreenshot',{format:'png'});await writeFile(resolve(tmpdir(),'ithir-panels-mobile.png'),Buffer.from(mobileShot.data,'base64'));
+  assert.deepEqual(events.filter(e=>e.method==='Runtime.exceptionThrown').map(e=>e.params.exceptionDetails.text),[]);
+  console.log('Panel checks passed: mouse, touch, keyboard, reset, anchors, collapse, and viewport bounds.');
+}finally{socket?.close();chrome.kill();await new Promise(done=>server.close(done));await new Promise(done=>chrome.exitCode!==null||chrome.signalCode!==null?done():chrome.once('exit',done));await rm(profile,{recursive:true,force:true});}

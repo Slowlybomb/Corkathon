@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-07T12:00:00Z",
+  "title": "Corkathon field workspace",
+  "extensions": {
+    "shadows": [{"name":"floating-panel","value":"0 12px 40px rgba(8,25,15,.2)","purpose":"Separate modules from the field map"}],
+    "motion": [{"name":"control-response","value":"150ms ease-out","purpose":"Hover and selected control feedback"}],
+    "breakpoints": [{"name":"compact","value":"1000px"},{"name":"phone","value":"700px"}]
+  },
+  "components": [
+    {"name":"Primary action","kind":"button","refersTo":"primary-button","html":"<button class=\"ds-primary\">Apply connection</button>","css":".ds-primary{font:600 12px Manrope,sans-serif;background:var(--cream,#fefee3);color:var(--ink,#102c20);padding:11px 16px;border:0;border-radius:7px;cursor:pointer}.ds-primary:hover{background:var(--peach,#ffc9b9)}.ds-primary:focus-visible{outline:2px solid #ffc9b9;outline-offset:3px}"},
+    {"name":"Floating module","kind":"custom","refersTo":"floating-panel","html":"<section class=\"ds-panel\"><h2>Field layers</h2><p>Illustrative intensity</p></section>","css":".ds-panel{padding:18px;background:var(--surface,#153526);color:var(--cream,#fefee3);border-radius:14px;font:12px Manrope,sans-serif;box-shadow:0 12px 40px rgba(8,25,15,.2)}.ds-panel h2{font-size:13px;margin:0 0 12px}.ds-panel p{color:#b8cab5;margin:0}"},
+    {"name":"Projection switch","kind":"nav","html":"<div class=\"ds-projection\"><button aria-pressed=\"false\">2D</button><button aria-pressed=\"true\">3D</button></div>","css":".ds-projection{display:inline-flex;background:#153526;padding:4px;border-radius:10px}.ds-projection button{font:700 12px Manrope,sans-serif;border:0;background:transparent;color:#fefee3;border-radius:7px;width:42px;height:36px}.ds-projection button[aria-pressed=true]{background:#fefee3;color:#2c6e49}.ds-projection button:hover{background:#4c956c}.ds-projection button:focus-visible{outline:2px solid #ffc9b9;outline-offset:2px}"},
+    {"name":"Connection address","kind":"input","html":"<label class=\"ds-label\">WebSocket address<input placeholder=\"ws://192.168.1.10:8080\"></label>","css":".ds-label{display:block;background:#153526;color:#fefee3;padding:18px;font:11px Manrope,sans-serif}.ds-label input{box-sizing:border-box;display:block;margin-top:8px;width:100%;background:#102c20;color:#fefee3;border:1px solid #4c956c;border-radius:7px;padding:11px;font:12px Manrope,sans-serif}.ds-label input::placeholder{color:#b8cab5}.ds-label input:focus-visible{outline:2px solid #ffc9b9;outline-offset:3px}"},
+    {"name":"Source status","kind":"chip","html":"<span class=\"ds-source\"><span></span>Demo source</span>","css":".ds-source{display:inline-flex;align-items:center;gap:8px;background:#153526;color:#fefee3;font:12px Manrope,sans-serif;padding:11px;border-radius:7px}.ds-source>span{width:7px;height:7px;border-radius:50%;background:#4c956c}"}
+  ],
+  "narrative": {
+    "northStar":"The map is the workspace",
+    "overview":"A fullscreen spatial view with compact controls and summaries floating above it. Preserve the five user-approved brand colours.",
+    "keyCharacteristics":["Fullscreen map","Floating modules","No page scrolling","Flat 2D and adaptive globe 3D; deck.gl analysis cells and a Three.js drone at field scale"],
+    "rules":[{"name":"The map stays visible","body":"Long content scrolls inside modules; the document does not scroll.","section":"layout"}],
+    "dos":["Check existing modules before creating another.","Keep sample surfaces explicitly illustrative."],
+    "donts":["Do not restore the sidebar and card dashboard.","Do not invent connectivity or soil measurements."]
+  }
+}

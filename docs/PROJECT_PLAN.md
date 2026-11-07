@@ -11,7 +11,8 @@ This is a product and hackathon delivery plan, not a technical specification. Co
 | Event | Cork Hackathon, UCC Computer Science Society |
 | Deadline | 19:00 on 7 November 2026, Cork local time |
 | Team | Three people: one strong technical contributor, one strong social contributor, and the project owner as a generalist |
-| Analysis and dataset ownership | A teammate will choose what to analyse and find the dataset; search is underway. Which teammate holds this role has not been specified |
+| Analysis and dataset ownership | The AI teammate, working with Claude, will choose what to analyse and find the dataset; search is underway |
+| Web app and dashboard ownership | The project owner, working with Codex |
 | Inspiration | OneSoil-style field monitoring and a central dashboard |
 | Hardware | Custom 5-inch FPV drone and Realme phone, model RMX3363 |
 | Intended phone role | Camera and computing unit for analysing observations during a future survey |
@@ -119,15 +120,15 @@ If automatic analysis is not ready, manually prepared observations can demonstra
 
 Actual flight, autonomous navigation, drone control through the dashboard, validated agronomic diagnosis, and broad farm-management features are outside the proposed demo scope. Real-time airborne phone processing remains a product ambition to assess later.
 
-## 8. Proposed team responsibilities
+## 8. Team responsibilities
 
 | Person | Primary responsibility | Reviewable outcome |
 | --- | --- | --- |
-| Strong technical teammate | Assess analysis feasibility and prepare the observation/replay flow | A repeatable demonstration with clear supported and unsupported outputs |
-| Strong social teammate | Clarify farmer needs, prepare the story and presentation | Evidence for the user problem and a concise pitch |
-| Project owner / generalist | Own scope, dashboard experience, and integration; connect hardware and software stories | A coherent end-to-end demo and a clear account of what actually works |
+| AI teammate, working with Claude | Own AI analysis, select the analysis target, source and prepare the dataset, and assess feasibility | Example analysis inputs and outputs with sources, supported findings, and limitations |
+| Strong social teammate | Proposed: clarify farmer needs, prepare the story and presentation | Evidence for the user problem and a concise pitch |
+| Project owner / generalist, working with Codex | Own the web app and computer dashboard, integrate AI results, and coordinate scope and demonstration | A coherent dashboard and end-to-end demo with a clear account of what actually works |
 
-The role split above remains proposed. The confirmed assignment is that a teammate owns choosing the analysis target and sourcing the dataset; their identity within the role split is unspecified. Review the demo together at each milestone. The social contributor can validate the central question with potential users: “How do you currently decide which part of a field to inspect first?”
+The AI and dashboard assignments are confirmed. The social teammate's assignment remains proposed. [AGENTS.md](../AGENTS.md) records these responsibilities for agents working in the repository. Review the demo together at each milestone. The social contributor can validate the central question with potential users: “How do you currently decide which part of a field to inspect first?”
 
 For the dataset handoff, record the source and reuse terms, a few example images or records, what the data supports analysing, and whether timestamps, locations, labels, or reference measurements are available. The team can then agree on what the dashboard may claim.
 

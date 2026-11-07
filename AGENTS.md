@@ -1,0 +1,28 @@
+# Corkathon: team and agent responsibilities
+
+## Project context
+
+- Cork Hackathon project inspired by OneSoil: field observations and analysis in a map-based dashboard.
+- Deadline: 19:00 on 7 November 2026, Cork local time.
+- Hardware concept: a custom 5-inch FPV drone carrying a Realme RMX3363 phone as camera and computing unit.
+- The hackathon demonstration shows the construction without flying. Clearly label recorded data, simulated movement, and illustrative map positions.
+- See [the project plan](docs/PROJECT_PLAN.md) for the product scope and demo story.
+
+## Responsibilities
+
+| Owner | Responsibility | Expected handoff |
+| --- | --- | --- |
+| AI teammate, working with Claude | Own the AI and analysis work, choose the initial analysis target, find and prepare the dataset, and assess what the results support | Example inputs and outputs, dataset source and reuse terms, supported findings, and known limitations |
+| Project owner, working with Codex | Own the web app and computer dashboard: layout, map, survey replay, observation views, and integration of AI results | A usable dashboard that connects position, evidence, analysis results, and inspection actions |
+| Third teammate, with strong social skills | Proposed focus: farmer needs, challenge fit, pitch, presentation materials, and demo narration | A clear user problem, presentation, and rehearsed demo story; confirm this assignment with the team |
+
+The AI and dashboard assignments are confirmed by the project owner. The third teammate's assignment is proposed. The project owner also coordinates overall scope and the final demonstration.
+
+## Collaboration
+
+- Codex should focus implementation on the web app and dashboard. Claude's AI work is owned by the AI teammate; coordinate changes across these areas with their owner.
+- Preserve concurrent work by other teammates and agents. Do not overwrite or revert their changes to make the workspace match an earlier state.
+- Before integrating AI results, agree on an example result format, available findings, timestamps, location information if available, and how unavailable or failed analysis is represented. Agree on the delivery method during technical planning.
+- Dashboard development can use clearly labelled example results while AI work proceeds. Example results do not establish that automated analysis works.
+- Keep observations, estimates, measurements, and unassessed properties distinguishable. Do not invent soil measurements or accuracy claims.
+- Prioritise one complete, repeatable demonstration before optional features.

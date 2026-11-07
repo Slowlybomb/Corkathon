@@ -4,6 +4,7 @@ import { findingsForLayer } from './survey.mjs';
 import { demoArea, coordinatesFor, surveyBounds } from './geo.mjs';
 import { createAnalysisOverlay } from './analysis-layer.mjs';
 import { telemetryAt, droneQuaternion } from './telemetry.mjs';
+import { createFlight, stepFlight } from './flight.mjs';
 
 const collection=features=>({type:'FeatureCollection',features});
 const feature=(geometry,properties={})=>({type:'Feature',geometry,properties});
@@ -87,40 +88,21 @@ export function createFieldMap(container,initialSurvey,onSelect,onStatus=()=>{},
     }
     mixer?.setTime(0);map.triggerRepaint();
   }
-  const corners=[demoArea.topLeft,demoArea.topRight,demoArea.bottomLeft,demoArea.bottomRight];
-  const area={west:Math.min(...corners.map(p=>p.longitude)),east:Math.max(...corners.map(p=>p.longitude)),south:Math.min(...corners.map(p=>p.latitude)),north:Math.max(...corners.map(p=>p.latitude))};
-  const insideArea=point=>Boolean(point)&&point.longitude>=area.west&&point.longitude<=area.east&&point.latitude>=area.south&&point.latitude<=area.north;
   function stepFollow(now){
     if(!follow||!flight)return;
     const dt=Math.min(.1,Math.max(0,(now-lastFrame)/1000));lastFrame=now;
-    const attitude=telemetryAt(liveTelemetry).orientation;
-    flight.live=Boolean(attitude)&&[attitude.headingDeg,attitude.pitchDeg,attitude.rollDeg].every(Number.isFinite);
-    if(flight.live){
-      const k=1-Math.exp(-dt/.25);
-      flight.heading??=attitude.headingDeg;
-      flight.heading=(flight.heading+((attitude.headingDeg-flight.heading+540)%360-180)*k+360)%360;
-      flight.pitch+=(attitude.pitchDeg-flight.pitch)*k;flight.roll+=(attitude.rollDeg-flight.roll)*k;
-    }
-    const heading=flight.heading??0,h=heading*Math.PI/180,metresPerLon=111320*Math.cos(flight.latitude*Math.PI/180);
-    const tilt=value=>Math.abs(value)<4?0:Math.max(-1,Math.min(1,(value-Math.sign(value)*4)/25));
-    const forward=flight.live?tilt(flight.pitch)*30:0,side=flight.live?tilt(flight.roll)*30:0;
-    flight.latitude=Math.max(area.south,Math.min(area.north,flight.latitude+(forward*Math.cos(h)-side*Math.sin(h))*dt/111320));
-    flight.longitude=Math.max(area.west,Math.min(area.east,flight.longitude+(forward*Math.sin(h)+side*Math.cos(h))*dt/metresPerLon));
+    const camera=stepFlight(flight,telemetryAt(liveTelemetry),dt);
     drone.position.copy(local(flight,120));
-    const pose=droneQuaternion({headingDeg:heading,pitchDeg:flight.pitch,rollDeg:flight.roll});if(pose)drone.quaternion.fromArray(pose);
+    const pose=droneQuaternion({headingDeg:flight.heading??0,pitchDeg:flight.pitch,rollDeg:flight.roll});if(pose)drone.quaternion.fromArray(pose);
     drone.visible=view==='3d';ensureDroneModel();
-    map.jumpTo({center:[flight.longitude+80*Math.sin(h)/metresPerLon,flight.latitude+80*Math.cos(h)/111320],bearing:heading,
-      pitch:Math.max(40,Math.min(68,60-flight.pitch*.3)),zoom:16.4,roll:flight.roll*.4});
+    map.jumpTo(camera);
     followFrame=requestAnimationFrame(stepFollow);
   }
   function setFollow(on){
     if(on===follow)return;
     follow=on;cancelAnimationFrame(followFrame);
-    if(on){
-      const point=telemetryAt(liveTelemetry).location,start=insideArea(point)?point:demoArea.center;
-      flight={latitude:start.latitude,longitude:start.longitude,heading:null,pitch:0,roll:0,live:false};
-      lastFrame=performance.now();followFrame=requestAnimationFrame(stepFollow);
-    }else{flight=null;if(ready)map.easeTo({roll:0,duration:reduced?0:300});updateTelemetryPosition();}
+    if(on){flight=createFlight(demoArea);lastFrame=performance.now();followFrame=requestAnimationFrame(stepFollow);}
+    else{flight=null;if(ready)map.easeTo({roll:0,duration:reduced?0:300});updateTelemetryPosition();}
   }
   function fit(){
     const bounds=surveyBounds(survey);
@@ -191,7 +173,7 @@ export function createFieldMap(container,initialSurvey,onSelect,onStatus=()=>{},
     setLayer(value){layer=value;updateData();},setSelected(value){selected=value;if(ready)map.setPaintProperty('finding-points','circle-color',['case',['==',['get','id'],selected??''],'#fefee3','#2c6e49']);},
     setSurvey(value){survey=value;updateData();},
     setTelemetry(value){liveTelemetry=value;if(!value)located=false;updateTelemetryPosition();},
-    locateDrone,setFollow,
+    locateDrone,setFollow,followMode(){return flight?.mode??null;},
     zoomBy(factor){map.easeTo({zoom:map.getZoom()+Math.log2(factor),duration:reduced?0:200});},fit,
   };
 }

@@ -3,6 +3,7 @@ import { createFieldMap } from './map.mjs';
 import { normaliseFeed, coordinatesFor } from './geo.mjs';
 import { loadScene, loadSceneLayer } from './scene.mjs';
 import { createDroneTelemetry } from './drone-telemetry.mjs';
+import { flightModeText } from './flight.mjs';
 
 const $ = selector => document.querySelector(selector);
 const survey = {name:'Field workspace',source:null,findings:[]};
@@ -186,6 +187,7 @@ function setFollow(on){
   map.setFollow(on);$('#drone-follow').setAttribute('aria-pressed',on);$('#drone-follow').classList.toggle('active',on);$('#drone-follow-note').hidden=!on;
 }
 $('#drone-follow').onclick=()=>setFollow($('#drone-follow').getAttribute('aria-pressed')!=='true');
+setInterval(()=>{if($('#drone-follow').getAttribute('aria-pressed')==='true')$('#drone-follow-note').textContent=flightModeText[map.followMode()]??'';},1000);
 window.addEventListener('phone-results',event=>{loadSatellite(event.detail,'field_boundary_score').then(()=>{if(survey.scene?.manifestUrl===event.detail.url)map.fit();});});
 function receiveObservations(message,source){
   const findings=normaliseFeed(message);

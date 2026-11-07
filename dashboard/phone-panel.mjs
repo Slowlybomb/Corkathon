@@ -4,7 +4,7 @@ import { createResultsClient } from './phone-results.mjs';
 
 const $=selector=>document.querySelector(selector);
 let connected=false,pending=null,timer,bytes=0,receiving=false;
-let telemetry=null;
+let telemetry=null,resultsLoaded=false;
 const sensorStates={off:'Enable sharing on the phone',permission_required:'Allow precise location on the phone',disabled:'Turn on phone location',unavailable:'Sensor unavailable',searching:'Waiting for a reading',stale:'Reading expired',unreliable:'Compass unreliable · move away from metal'};
 function renderTelemetry(){
   const current=telemetryAt(telemetry),position=current.location,orientation=current.orientation;
@@ -25,7 +25,7 @@ function failed(error){const message=error.message??String(error);$('#phone-stat
 const link=createPhoneLink({
   onState(state,name){
     connected=state==='connected';
-    if(!connected){telemetry=null;results?.reset();}
+    if(!connected){telemetry=null;resultsLoaded=false;results?.reset();}
     renderTelemetry();
     $('#phone-status').textContent=({disconnected:'Disconnected. Start Bluetooth in the Android app.',connecting:'Choose the camera module in the Bluetooth device picker…',authenticating:'Checking the camera module connection code…',connected:`Connected to ${name??'camera module'} over Bluetooth LE.`})[state];
     $('#phone-dot').className=`status-dot ${connected?'connected':''}`;
@@ -48,7 +48,8 @@ const link=createPhoneLink({
       case 'ready':log('Camera module code accepted');break;
       case 'status':
         $('#phone-camera').textContent=packet.camera==='capturing'?'Capturing':packet.camera==='off'?`Off · ${packet.armed?'requests allowed':'requests blocked'}`:'Unknown';
-        $('#phone-model').textContent=({results_ready:'Results ready on the phone',on_device:'On the phone · run a survey',not_connected:'Not connected'})[packet.model]??'Status unavailable';
+        $('#phone-model').textContent=({results_ready:'Results ready on the phone',computing:'Computing on the phone…',on_device:'On the phone · run a survey',not_connected:'Not connected'})[packet.model]??'Status unavailable';
+        if(packet.model==='results_ready'&&!resultsLoaded&&connected){resultsLoaded=true;$('#phone-results').click();}
         $('#phone-battery').textContent=typeof packet.battery==='number'&&packet.battery>=0&&packet.battery<=100?`${packet.battery}%`:'Unknown';
         $('#phone-link-mode').textContent=packet.simulatedBps===1000?'BLE · simulated 1 kbit/s limit':'Bluetooth LE · no LoRa simulation';
         break;

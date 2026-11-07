@@ -14,25 +14,16 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
-import org.json.JSONObject;
-
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 
 public final class ModelTestActivity extends Activity {
     private static final int CREAM = Color.rgb(254, 254, 227), MUTED = Color.rgb(184, 202, 181), INK = Color.rgb(16, 44, 32);
-    private static final int DOY = 150;
-    private static final int TILE = 144;
-    private static final int[] PREVIEW = {AgriModel.PH, AgriModel.CARBON, AgriModel.CLAY, AgriModel.SAND, AgriModel.BOUNDARY};
-    private static final String[] PREVIEW_NAMES = {"pH 0-5 cm", "organic carbon 0-5 cm (g/kg)", "clay 0-5 cm (%)", "sand 0-5 cm (%)", "field boundary score"};
-    private static final int[] SURVEY_CHANNELS = ResultServer.channels();
+    private static final String[] PREVIEW = {"field_boundary_score", "ph_0-5cm", "soc_gkg_0-5cm", "clay_pct_0-5cm", "sand_pct_0-5cm", "ndvi"};
+    private static final int[] PREVIEW_CHANNELS = {AgriModel.BOUNDARY, AgriModel.PH, AgriModel.CARBON, AgriModel.CLAY, AgriModel.SAND, -1};
+    private static final String[] PREVIEW_LABELS = {"field boundary score", "pH 0-5 cm", "organic carbon 0-5 cm (g/kg)", "clay 0-5 cm (%)", "sand 0-5 cm (%)", "NDVI"};
 
     private TextView log;
     private ScrollView logScroll;
@@ -40,10 +31,10 @@ public final class ModelTestActivity extends Activity {
     private TextView legend;
     private AgriModel model;
     private AgriModel.Result last;
-    private float[][] mosaic;
-    private boolean[] tileDone;
-    private int mosaicSize;
-    private boolean showMosaic;
+    private volatile List<ResultServer.Layer> surveyLayers;
+    private volatile boolean[] tileDone;
+    private volatile int surveyTiles;
+    private volatile boolean showMosaic;
     private int previewIndex;
     private volatile boolean busy;
     private final ResultServer results = new ResultServer(this::say);
@@ -67,7 +58,7 @@ public final class ModelTestActivity extends Activity {
         root.addView(row0);
         button(row0, "Survey Cork area", () -> start(5));
         shareButton = button(row0, "Share results", this::toggleShare);
-        shareButton.setEnabled(false);
+        shareButton.setEnabled(ResultServer.latest != null);
         button(row0, "Camera module", this::finish);
         shareInfo = text(root, "Run a survey, then share its results with the website.", 13, MUTED);
         LinearLayout row1 = new LinearLayout(this);
@@ -89,6 +80,15 @@ public final class ModelTestActivity extends Activity {
         log.setTextIsSelectable(true);
         logScroll.addView(log);
         say("device " + Build.MANUFACTURER + " " + Build.MODEL + ", Android " + Build.VERSION.RELEASE + ", ABI " + Build.SUPPORTED_ABIS[0]);
+        if (ResultServer.latest != null) {
+            surveyLayers = ResultServer.latest.layers;
+            surveyTiles = ResultServer.latest.width / SurveyRunner.TILE;
+            tileDone = new boolean[surveyTiles * surveyTiles];
+            Arrays.fill(tileDone, true);
+            showMosaic = true;
+            showPreview();
+            say("survey results already on the phone: " + surveyLayers.size() + " layers");
+        }
         shareAfterSurvey = getIntent().getBooleanExtra("share", false);
         if (getIntent().getBooleanExtra("autorun", false)) {
             start(3);
@@ -112,12 +112,15 @@ public final class ModelTestActivity extends Activity {
             return;
         }
         try {
+            if (ResultServer.latest != null) {
+                results.publish(ResultServer.latest);
+            }
             results.start();
         } catch (Exception e) {
             say("could not share results: " + e);
             return;
         }
-        StringBuilder s = new StringBuilder("Sharing. In the website choose Data source > Satellite scene package and enter:\n");
+        StringBuilder s = new StringBuilder("Sharing over WiFi or USB. In the website choose Data source > Satellite scene package and enter:\n");
         for (String u : ResultServer.urls()) {
             s.append(u).append('\n');
         }
@@ -126,13 +129,6 @@ public final class ModelTestActivity extends Activity {
         shareButton.setText("Stop sharing");
         shareInfo.setText(s.toString());
         say("sharing results on port " + ResultServer.PORT);
-        for (String u : ResultServer.urls()) {
-            say("  " + u);
-        }
-    }
-
-    private static int surveyIndex(int channel) {
-        return channel == AgriModel.BOUNDARY ? 0 : 1 + channel - AgriModel.PH;
     }
 
     private void start(int which) {
@@ -177,7 +173,7 @@ public final class ModelTestActivity extends Activity {
         say("");
         say(title);
         ByteBuffer refl = AgriModel.asset(getAssets(), "agri/" + name + "_in.f32");
-        AgriModel.Result r = model.run(refl, size, DOY, irish);
+        AgriModel.Result r = model.run(refl, size, 150, irish);
         int n = size - 2 * AgriModel.MARGIN;
         say(String.format(Locale.US, "  %d x %d px chunk: %.2f s on one core", n, n, r.computeNanos / 1e9));
         compare(r, AgriModel.asset(getAssets(), "agri/" + name + "_expected.f32"));
@@ -188,87 +184,36 @@ public final class ModelTestActivity extends Activity {
 
     private void survey() throws Exception {
         say("");
-        JSONObject info = new JSONObject(AgriModel.text(getAssets(), "agri/cork_cube.json"));
-        int a = info.getInt("width");
-        int w = info.getInt("window_px");
-        int doy = info.getInt("doy");
-        int tiles = w / TILE;
-        int size = TILE + 2 * AgriModel.MARGIN;
-        ByteBuffer cube = AgriModel.asset(getAssets(), "agri/cork_cube.u16");
-        say(String.format(Locale.US, "survey: %.2f x %.2f km in %d tiles of %d x %d px on %d cores",
-                w * 0.01, w * 0.01, tiles * tiles, TILE, TILE, model.instances));
-        mosaicSize = w;
-        mosaic = new float[SURVEY_CHANNELS.length][w * w];
-        tileDone = new boolean[tiles * tiles];
-        showMosaic = true;
-        runOnUiThread(this::showPreview);
-        ExecutorService pool = Executors.newFixedThreadPool(model.instances, r -> new Thread(null, r, "agri-tile", 64L << 20));
-        long t0 = System.nanoTime();
-        List<Future<Double>> jobs = new ArrayList<>();
-        int[] done = {0};
-        try {
-            for (int ti = 0; ti < tiles; ti++) {
-                for (int k = 0; k < tiles; k++) {
-                    int tj = ti % 2 == 0 ? k : tiles - 1 - k;
-                    int row = ti;
-                    jobs.add(pool.submit(() -> {
-                        ByteBuffer refl = cut(cube, a, row * TILE, tj * TILE, size);
-                        AgriModel.Result r = model.run(refl, size, doy, true);
-                        for (int p = 0; p < SURVEY_CHANNELS.length; p++) {
-                            for (int y = 0; y < TILE; y++) {
-                                for (int x = 0; x < TILE; x++) {
-                                    mosaic[p][(row * TILE + y) * w + tj * TILE + x] = r.value(SURVEY_CHANNELS[p], y, x);
-                                }
-                            }
-                        }
-                        int count;
-                        synchronized (done) {
-                            tileDone[row * tiles + tj] = true;
-                            count = ++done[0];
-                        }
-                        say(String.format(Locale.US, "  tile %2d/%d (row %d, col %d): %.2f s on core %d, %.1f s since start",
-                                count, tiles * tiles, row, tj, r.computeNanos / 1e9, r.slot, (System.nanoTime() - t0) / 1e9));
-                        runOnUiThread(this::showPreview);
-                        return r.computeNanos / 1e9;
-                    }));
-                }
+        say("survey: the whole Cork area on " + model.instances + " cores");
+        ResultServer.Survey s = SurveyRunner.run(getAssets(), model, Build.MANUFACTURER + " " + Build.MODEL, new SurveyRunner.Progress() {
+            @Override
+            public void started(List<ResultServer.Layer> layers, int tiles, boolean[] done) {
+                surveyLayers = layers;
+                surveyTiles = tiles;
+                tileDone = done;
+                showMosaic = true;
+                runOnUiThread(ModelTestActivity.this::showPreview);
             }
-            double sum = 0;
-            for (Future<Double> f : jobs) {
-                sum += f.get();
-            }
-            double wall = (System.nanoTime() - t0) / 1e9;
-            say(String.format(Locale.US, "survey done: %.1f s for %.1f km2 (%d pixels of 10 m), %.2f s per tile on one core, %.0f pixels/s with all cores",
-                    wall, w * w * 1e-4, w * w, sum / jobs.size(), w * (double) w / wall));
-            ResultServer.Survey done1 = new ResultServer.Survey(mosaic, w, info.getDouble("window_e"), info.getDouble("window_n"),
-                    Build.MANUFACTURER + " " + Build.MODEL, wall, model.instances);
-            ResultServer.latest = done1;
-            long bytes = results.publish(done1);
-            say(String.format(Locale.US, "results ready: %d layers (%.1f MB compressed for WiFi or USB). Back on the camera module screen, Bluetooth can send them to the website.",
-                    SURVEY_CHANNELS.length, bytes / 1048576.0));
-            runOnUiThread(() -> {
-                shareButton.setEnabled(true);
-                if (shareAfterSurvey && !results.running()) {
-                    toggleShare();
-                }
-            });
-        } finally {
-            pool.shutdown();
-        }
-    }
 
-    private static ByteBuffer cut(ByteBuffer cube, int a, int y0, int x0, int size) {
-        ByteBuffer refl = ByteBuffer.allocateDirect(AgriModel.BANDS * size * size * 4).order(ByteOrder.LITTLE_ENDIAN);
-        for (int b = 0; b < AgriModel.BANDS; b++) {
-            for (int r = 0; r < size; r++) {
-                int at = ((b * a + y0 + r) * a + x0) * 2;
-                for (int c = 0; c < size; c++) {
-                    refl.putFloat((cube.getShort(at + c * 2) & 0xFFFF) / 10000f);
-                }
+            @Override
+            public void tile(int done, int total, int row, int col, double seconds, int core, double elapsed) {
+                say(String.format(Locale.US, "  tile %2d/%d (row %d, col %d): %.2f s on core %d, %.1f s since start",
+                        done, total, row, col, seconds, core, elapsed));
+                runOnUiThread(ModelTestActivity.this::showPreview);
             }
-        }
-        refl.rewind();
-        return refl;
+        });
+        ResultServer.latest = s;
+        surveyLayers = s.layers;
+        long bytes = results.publish(s);
+        say(String.format(Locale.US, "survey done: %.1f s for %.1f km2; %d layers ready (%.1f MB compressed). Bluetooth sends them from the camera module screen.",
+                s.seconds, s.width * s.width * 1e-4, s.layers.size(), bytes / 1048576.0));
+        runOnUiThread(() -> {
+            shareButton.setEnabled(true);
+            showPreview();
+            if (shareAfterSurvey && !results.running()) {
+                toggleShare();
+            }
+        });
     }
 
     private void compare(AgriModel.Result r, ByteBuffer expected) {
@@ -304,24 +249,37 @@ public final class ModelTestActivity extends Activity {
 
     private void nextLayer() {
         previewIndex = (previewIndex + 1) % PREVIEW.length;
+        if (!showMosaic && PREVIEW_CHANNELS[previewIndex] < 0) {
+            previewIndex = (previewIndex + 1) % PREVIEW.length;
+        }
         showPreview();
     }
 
     private void showPreview() {
-        float[] v;
+        float[] v = null;
         int n;
         boolean[] valid = null;
-        if (showMosaic && mosaic != null) {
-            n = mosaicSize;
-            v = mosaic[surveyIndex(PREVIEW[previewIndex])];
-            int tiles = n / TILE;
+        List<ResultServer.Layer> layers = surveyLayers;
+        if (showMosaic && layers != null) {
+            n = layers.get(0).data.length == 0 ? 0 : (int) Math.round(Math.sqrt(layers.get(0).data.length));
+            for (ResultServer.Layer l : layers) {
+                if (l.name.equals(PREVIEW[previewIndex])) {
+                    v = l.data;
+                }
+            }
+            if (v == null) {
+                legend.setText(PREVIEW_LABELS[previewIndex] + ": ready when the survey finishes");
+                return;
+            }
+            boolean[] done = tileDone;
+            int tiles = surveyTiles;
             valid = new boolean[n * n];
             for (int i = 0; i < n * n; i++) {
-                valid[i] = tileDone[(i / n / TILE) * tiles + (i % n) / TILE];
+                valid[i] = done == null || done[(i / n / SurveyRunner.TILE) * tiles + (i % n) / SurveyRunner.TILE];
             }
-        } else if (last != null) {
+        } else if (last != null && PREVIEW_CHANNELS[previewIndex] >= 0) {
             n = last.interior;
-            v = last.layer(PREVIEW[previewIndex]);
+            v = last.layer(PREVIEW_CHANNELS[previewIndex]);
         } else {
             return;
         }
@@ -349,7 +307,7 @@ public final class ModelTestActivity extends Activity {
         }
         preview.setImageBitmap(Bitmap.createBitmap(px, n, n, Bitmap.Config.ARGB_8888));
         legend.setText(String.format(Locale.US, "%s: %.3g (red) to %.3g (green), %d x %d pixels of 10 m. Model estimate, not a field measurement.",
-                PREVIEW_NAMES[previewIndex], lo, hi, n, n));
+                PREVIEW_LABELS[previewIndex], lo, hi, n, n));
     }
 
     private static int ramp(float t) {

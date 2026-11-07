@@ -186,7 +186,7 @@ function setFollow(on){
   map.setFollow(on);$('#drone-follow').setAttribute('aria-pressed',on);$('#drone-follow').classList.toggle('active',on);$('#drone-follow-note').hidden=!on;
 }
 $('#drone-follow').onclick=()=>setFollow($('#drone-follow').getAttribute('aria-pressed')!=='true');
-window.addEventListener('phone-results',event=>{loadSatellite(event.detail,'ph_0-5cm').then(()=>{if(survey.scene?.manifestUrl===event.detail.url)map.fit();});});
+window.addEventListener('phone-results',event=>{loadSatellite(event.detail,'field_boundary_score').then(()=>{if(survey.scene?.manifestUrl===event.detail.url)map.fit();});});
 function receiveObservations(message,source){
   const findings=normaliseFeed(message);
   if(!findings.length)return false;

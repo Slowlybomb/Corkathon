@@ -40,7 +40,9 @@ public final class MainActivity extends Activity {
     private ScrollView logScroll;
     private Switch armed, limited, shareSensors;
     private Button start, stop, test;
-    private boolean running, subscribed, authenticated, sending, visible;
+    private boolean running, subscribed, authenticated, sending, visible, autoRequested;
+    private volatile boolean surveyRunning;
+    private volatile String surveyState = "starting";
     private int offset, inFlight, chunkSize = 20, session;
     private String pin = "", captureId;
     private byte[] imageTransfer;
@@ -230,11 +232,38 @@ public final class MainActivity extends Activity {
     }
     private void sendResults(String id,String layer){
         ResultServer.Survey survey=ResultServer.latest;
-        if(survey==null){send(packet("error","id",id,"message","No model results yet. Run Survey Cork area in the model screen first."));return;}
+        if(survey==null){send(packet("error","id",id,"message",surveyRunning?"The phone is still computing the survey ("+surveyState+"). Try again shortly.":"No model results yet. Run Survey Cork area in the model screen first."));return;}
         try{send(layer==null?ResultServer.header(survey,id):ResultServer.layerPacket(survey,id,layer));log(layer==null?"Sent model result list":"Sent model layer "+layer);}
         catch(Exception exception){send(packet("error","id",id,"message","Model results unavailable: "+exception.getMessage()));}
     }
-    private String modelState(){return ResultServer.latest==null?"on_device":"results_ready";}
+    private String modelState(){return ResultServer.latest==null?surveyRunning?"computing":"on_device":"results_ready";}
+    private void autoStart(){
+        boolean first=!autoRequested;autoRequested=true;
+        boolean ble=Build.VERSION.SDK_INT<31||(checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)==PackageManager.PERMISSION_GRANTED&&checkSelfPermission(Manifest.permission.BLUETOOTH_ADVERTISE)==PackageManager.PERMISSION_GRANTED);
+        if(!running&&(ble||first))startBluetooth();
+        boolean located=checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED;
+        if(ble&&!shareSensors.isChecked()&&(located||first))shareSensors.setChecked(true);
+        startSurvey();
+    }
+    private void startSurvey(){
+        if(surveyRunning||ResultServer.latest!=null)return;
+        surveyRunning=true;surveyState="self-check";log("Model: self-check, then a survey of the Cork area on all cores");
+        new Thread(null,()->{
+            try{
+                AgriModel model=AgriModel.get(getAssets(),Math.min(4,Runtime.getRuntime().availableProcessors()));
+                log("Model self-check: "+SurveyRunner.check(getAssets(),model));
+                surveyState="0 of 16 tiles";
+                ResultServer.Survey survey=SurveyRunner.run(getAssets(),model,Build.MANUFACTURER+" "+Build.MODEL,(done,total,row,col,seconds,core,elapsed)->{
+                    surveyState=done+" of "+total+" tiles";
+                    if(done%4==0)log(String.format(Locale.UK,"Model survey: %d of %d tiles · %.0f s",done,total,elapsed));
+                });
+                ResultServer.latest=survey;
+                log(String.format(Locale.UK,"Model results ready: %d layers in %.0f s. The dashboard can load them now.",survey.layers.size(),survey.seconds));
+                main.post(()->{if(authenticated)sendStatus();});
+            }catch(Throwable error){log("Model survey failed: "+error);}
+            finally{surveyRunning=false;}
+        },"agri-survey",64L<<20).start();
+    }
     private void cancelCapture(String reason){String cancelled=captureId;captureId=null;camera.stop();updateCamera();if(cancelled!=null){log(reason);send(packet("error","id",cancelled,"message",reason));}}
     private void updateCamera(){cameraStatus.setText(camera.active?"Capturing one image…":armed.isChecked()?"Camera off · requests allowed":"Camera off · requests blocked");}
     private void sendStatus(){
@@ -253,8 +282,8 @@ public final class MainActivity extends Activity {
     }
     /** Integration handoff only: call with the AI teammate's agreed observations. No model runs here. */
     public void publishObservations(JSONArray observations,long capturedAt){main.post(()->{if(authenticated)send(packet("observations","capturedAt",capturedAt,"observations",observations));else log("Observations not sent: ground station disconnected");});}
-    @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] results){super.onRequestPermissionsResult(request,permissions,results);if(request==3){if(visible&&shareSensors.isChecked()){telemetry.start();publishTelemetry();}if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED)log("GPS needs precise location permission. Orientation can still work.");return;}boolean granted=results.length>0;for(int result:results)granted&=result==PackageManager.PERMISSION_GRANTED;if(!granted){log("Permission denied. Allow it in Android settings to use this feature.");return;}if(request==1&&visible)startBluetooth();if(request==2&&visible)armed.setChecked(true);}
-    @Override protected void onResume(){super.onResume();visible=true;main.removeCallbacks(telemetryTick);main.post(telemetryTick);}
+    @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] results){super.onRequestPermissionsResult(request,permissions,results);if(request==3){if(visible&&shareSensors.isChecked()){telemetry.start();publishTelemetry();}if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED)log("GPS needs precise location permission. Orientation can still work.");return;}boolean granted=results.length>0;for(int result:results)granted&=result==PackageManager.PERMISSION_GRANTED;if(!granted){log("Permission denied. Allow it in Android settings to use this feature.");return;}if(request==1&&visible){startBluetooth();if(!shareSensors.isChecked())shareSensors.setChecked(true);}if(request==2&&visible)armed.setChecked(true);}
+    @Override protected void onResume(){super.onResume();visible=true;main.removeCallbacks(telemetryTick);main.post(telemetryTick);autoStart();}
     @Override protected void onStop(){visible=false;main.removeCallbacks(telemetryTick);shareSensors.setChecked(false);telemetry.stop();stopBluetooth();super.onStop();}
     @Override protected void onDestroy(){camera.stop();telemetry.stop();main.removeCallbacksAndMessages(null);super.onDestroy();}
 }

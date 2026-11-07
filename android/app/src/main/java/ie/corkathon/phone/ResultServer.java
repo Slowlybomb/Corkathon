@@ -28,17 +28,40 @@ import java.util.zip.GZIPOutputStream;
 
 final class ResultServer {
     static final int PORT = 8080;
-    static final String[] DEPTHS = {"0-5cm", "5-15cm", "15-30cm", "30-60cm", "60-100cm", "100-200cm"};
-    static final int[][] DEPTH_CM = {{0, 5}, {5, 15}, {15, 30}, {30, 60}, {60, 100}, {100, 200}};
-    static final String[] SOIL = {"ph", "soc_gkg", "clay_pct", "sand_pct"};
-    static final String[] SOIL_UNITS = {"pH", "g/kg", "%", "%"};
 
     interface Listener {
         void log(String line);
     }
 
+    static final class Layer {
+        final String name;
+        final String units;
+        final String group;
+        final int[] depth;
+        final float[] data;
+
+        Layer(String name, String units, String group, int[] depth, float[] data) {
+            this.name = name;
+            this.units = units;
+            this.group = group;
+            this.depth = depth;
+            this.data = data;
+        }
+
+        String source() {
+            switch (group) {
+                case "weather":
+                    return "ERA5-Land observed for the scene date (recorded data, about 9 km)";
+                case "surface":
+                    return "computed on the phone from the recorded Sentinel-2 bands";
+                default:
+                    return "model on the phone (Century ARM64)";
+            }
+        }
+    }
+
     static final class Survey {
-        final float[][] layers;
+        final List<Layer> layers;
         final int width;
         final double originX;
         final double originY;
@@ -47,7 +70,7 @@ final class ResultServer {
         final int cores;
         final long at;
 
-        Survey(float[][] layers, int width, double originX, double originY, String device, double seconds, int cores) {
+        Survey(List<Layer> layers, int width, double originX, double originY, String device, double seconds, int cores) {
             this.layers = layers;
             this.width = width;
             this.originX = originX;
@@ -56,6 +79,15 @@ final class ResultServer {
             this.seconds = seconds;
             this.cores = cores;
             this.at = System.currentTimeMillis();
+        }
+
+        Layer layer(String name) {
+            for (Layer l : layers) {
+                if (l.name.equals(name)) {
+                    return l;
+                }
+            }
+            return null;
         }
     }
 
@@ -70,39 +102,22 @@ final class ResultServer {
         this.listener = listener;
     }
 
-    static int[] channels() {
-        int[] c = new int[1 + 24];
-        c[0] = AgriModel.BOUNDARY;
-        for (int t = 0; t < 24; t++) {
-            c[1 + t] = AgriModel.PH + t;
-        }
-        return c;
-    }
-
-    static String layerName(int index) {
-        return index == 0 ? "field_boundary_score" : SOIL[(index - 1) / 6] + "_" + DEPTHS[(index - 1) % 6];
-    }
-
     static JSONObject manifest(Survey s) throws Exception {
         JSONArray list = new JSONArray();
-        for (int i = 0; i < s.layers.length; i++) {
-            float[] v = s.layers[i];
+        for (Layer l : s.layers) {
             double min = Double.POSITIVE_INFINITY, max = Double.NEGATIVE_INFINITY, sum = 0;
-            for (float x : v) {
+            for (float x : l.data) {
                 min = Math.min(min, x);
                 max = Math.max(max, x);
                 sum += x;
             }
-            String name = layerName(i);
-            JSONObject l = new JSONObject().put("name", name).put("file", "layers/" + name + ".f32").put("type", "float32")
-                    .put("min", round(min)).put("max", round(max)).put("mean", round(sum / v.length));
-            if (i == 0) {
-                l.put("units", "score").put("group", "fields");
-            } else {
-                int[] d = DEPTH_CM[(i - 1) % 6];
-                l.put("units", SOIL_UNITS[(i - 1) / 6]).put("group", "soil").put("depth_cm", new JSONArray().put(d[0]).put(d[1]));
+            JSONObject o = new JSONObject().put("name", l.name).put("file", "layers/" + l.name + ".f32").put("type", "float32")
+                    .put("units", l.units).put("group", l.group).put("source", l.source())
+                    .put("min", round(min)).put("max", round(max)).put("mean", round(sum / l.data.length));
+            if (l.depth != null) {
+                o.put("depth_cm", new JSONArray().put(l.depth[0]).put(l.depth[1]));
             }
-            list.put(l);
+            list.put(o);
         }
         return new JSONObject()
                 .put("name", "Cork survey computed on the phone (" + s.device + ")")
@@ -112,23 +127,23 @@ final class ResultServer {
                 .put("nodata_float32", -9999)
                 .put("layers", list)
                 .put("computed", new JSONObject().put("device", s.device).put("seconds", round(s.seconds)).put("cores", s.cores).put("at", s.at))
-                .put("notes", "Computed on the phone by the Century model compiled to ARM64 from the recorded Sentinel-2 L2A scene of 30 May 2023 stored in the app. "
-                        + "Soil layers are model estimates with soil heads recalibrated on Irish SoilGrids (held-out R2 pH 0.19, organic carbon 0.20), not field measurements. "
-                        + "The field boundary score is the raw model score. Weather layers are left out: the model's weather heads learnt Bavarian seasons.")
-                .put("sources", "Sentinel-2 L2A (Earth Search, AWS); model trained on Munich480 with ISRIC SoilGrids 2.0 labels");
+                .put("notes", "Soil layers and the field boundary score are computed on the phone by the Century model compiled to ARM64, from the recorded Sentinel-2 L2A scene of 30 May 2023 stored in the app. "
+                        + "Soil values are model estimates with soil heads recalibrated on Irish SoilGrids (held-out R2 pH 0.19, organic carbon 0.20), not field measurements. "
+                        + "NDVI, NDMI and NDWI are computed on the phone from the same recorded bands. "
+                        + "Weather layers are observed ERA5-Land values for the scene date (about 9 km), not model output.")
+                .put("sources", "Sentinel-2 L2A (Earth Search, AWS); ERA5-Land via Open-Meteo; model trained on Munich480 with ISRIC SoilGrids 2.0 labels");
     }
 
     long publish(Survey s) throws Exception {
         long total = 0;
         files.clear();
-        for (int i = 0; i < s.layers.length; i++) {
-            float[] v = s.layers[i];
-            ByteBuffer b = ByteBuffer.allocate(v.length * 4).order(ByteOrder.LITTLE_ENDIAN);
-            for (float x : v) {
+        for (Layer l : s.layers) {
+            ByteBuffer b = ByteBuffer.allocate(l.data.length * 4).order(ByteOrder.LITTLE_ENDIAN);
+            for (float x : l.data) {
                 b.putFloat(x);
             }
             byte[] gz = gzip(b.array());
-            files.put("/layers/" + layerName(i) + ".f32", gz);
+            files.put("/layers/" + l.name + ".f32", gz);
             total += gz.length;
         }
         byte[] manifest = gzip(manifest(s).toString(2).getBytes(StandardCharsets.UTF_8));
@@ -151,13 +166,8 @@ final class ResultServer {
     }
 
     static JSONObject layerPacket(Survey s, String id, String name) throws Exception {
-        int index = -1;
-        for (int i = 0; i < s.layers.length; i++) {
-            if (layerName(i).equals(name)) {
-                index = i;
-            }
-        }
-        if (index < 0) {
+        Layer l = s.layer(name);
+        if (l == null) {
             throw new IllegalArgumentException("unknown layer " + name);
         }
         int step = stride(s.width, s.width);
@@ -165,7 +175,7 @@ final class ResultServer {
         ByteBuffer b = ByteBuffer.allocate(grid * grid * 4).order(ByteOrder.LITTLE_ENDIAN);
         for (int r = 0; r < grid; r++) {
             for (int c = 0; c < grid; c++) {
-                b.putFloat(s.layers[index][(r * step) * s.width + c * step]);
+                b.putFloat(l.data[(r * step) * s.width + c * step]);
             }
         }
         java.util.zip.Deflater d = new java.util.zip.Deflater(9);
@@ -180,10 +190,6 @@ final class ResultServer {
         return new JSONObject().put("v", 1).put("type", "results_layer").put("id", id).put("sentAt", System.currentTimeMillis())
                 .put("name", name).put("grid", grid).put("stride", step)
                 .put("data", android.util.Base64.encodeToString(z.toByteArray(), android.util.Base64.NO_WRAP));
-    }
-
-    boolean hasResults() {
-        return files.containsKey("/manifest.json");
     }
 
     void start() throws IOException {

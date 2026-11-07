@@ -1,0 +1,6 @@
+*.exe
+!century/bin/century.exe
+out/
+data/*
+!data/eeg_eye.bin
+check_*.cy

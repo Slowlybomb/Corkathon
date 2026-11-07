@@ -3,7 +3,10 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#2c6e49"><title>Corkathon · Field view</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.6.2/dist/maplibre-gl.css">
   <link rel="stylesheet" href="style.css">
+  <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"}}</script>
+  <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5.6.2/dist/maplibre-gl.js" defer></script>
 </head>
 <body>
   <svg class="icon-definitions" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
@@ -16,11 +19,12 @@
     <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
   </defs></svg>
   <main class="field-workspace" aria-label="Field survey workspace">
-    <canvas id="map" tabindex="0" aria-label="Illustrative field map. Drag to pan; use arrow keys to pan, plus and minus to zoom. Findings are also available in the observations panel."></canvas>
+    <div id="map" aria-label="Cork demo map"></div>
+    <p id="map-notice" class="map-notice floating-surface" role="status">Loading geographic map…</p>
     <header class="toolbar floating-surface">
       <a href="./" class="brand" aria-label="Corkathon home"><svg class="icon"><use href="#i-field"/></svg><span>Corkathon</span></a>
       <span class="toolbar-divider"></span>
-      <div class="field-context"><h1>South meadow</h1><span id="survey-context">Cork, Ireland · Sample survey</span></div>
+      <div class="field-context"><h1>Cork demo area</h1><span id="survey-context">51.949961, −8.220098 · Sample survey</span></div>
       <span class="survey-date">7 Nov 2026</span>
       <button id="connection-toggle" class="button connection-toggle" aria-expanded="false" aria-controls="connection-panel"><span class="status-dot" id="connection-dot"></span><span id="connection-label">Demo source</span><svg class="icon"><use href="#i-settings"/></svg></button>
     </header>
@@ -34,7 +38,7 @@
         <button class="button primary" type="submit">Apply connection</button>
       </form>
     </section>
-    <div class="map-context"><span class="status-dot"></span><span id="map-mode-label">3D sample view</span><span class="map-context-divider">/</span><span>South meadow</span></div>
+    <div class="map-context"><span class="status-dot"></span><span id="map-mode-label">3D sample view</span><span class="map-context-divider">/</span><span>Cork demo area</span></div>
     <section class="floating-surface layers-panel" aria-labelledby="layer-title">
       <div class="panel-heading"><h2 id="layer-title"><svg class="icon"><use href="#i-layers"/></svg>Field layers</h2><button id="layers-toggle" class="icon-button" aria-expanded="true" aria-controls="layer-content" aria-label="Collapse field layers"><svg class="icon"><use href="#i-chevron"/></svg></button></div>
       <div id="layer-content">
@@ -62,9 +66,16 @@
       <div class="timeline-wrap"><input id="timeline" type="range" min="0" max="150" step="0.1" value="0" aria-label="Survey replay position"><div class="timeline-labels"><time id="elapsed">00:00</time><span id="reached">0 of 6 reached</span><time id="duration">02:30</time></div></div>
       <button id="speed" class="button speed-button" aria-label="Playback speed, 1 times">1×</button><span class="toolbar-divider"></span><button id="export" class="icon-button" aria-label="Export findings" title="Export findings"><svg class="icon"><use href="#i-download"/></svg></button>
     </section>
-    <footer class="map-credit"><span id="source-credit">Sample data · illustrative map & simulated positions</span><span>Drag to explore <span>·</span> Shift + drag to rotate in 3D</span></footer>
+    <footer class="map-credit"><span id="source-credit">Real map · sample observations & simulated route</span><span>Drag to explore <span>·</span> Right-drag to rotate in 3D</span></footer>
     <div id="toast" class="toast floating-surface" role="status" hidden></div>
   </main>
-  <script type="module" src="app.mjs"></script>
+  <script type="module">
+    import('./app.mjs').catch(error => {
+      const notice=document.querySelector('#map-notice');
+      notice.hidden=false;
+      notice.textContent='Map libraries could not load. Check internet access and reload this page.';
+      console.error(error);
+    });
+  </script>
 </body>
 </html>

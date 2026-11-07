@@ -1,6 +1,6 @@
 # Map and globe shortlist
 
-Researched 7 November 2026. This is a shortlist for the project owner to inspect before implementation. No map engine has been selected or installed. Three.js is required for the replacement 3D renderer.
+Researched 7 November 2026. The project owner has selected **MapLibre + Three.js**. The original shortlist below is retained as research context. Dependencies are pinned CDN imports; the local demo uses a Mercator map with a Three.js WebGL layer. Three.js is required for the 3D renderer.
 
 ## Renderers
 

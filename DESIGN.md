@@ -87,9 +87,9 @@ Maintain roughly 24 px desktop edge insets and 12 px on smaller screens. Control
 
 Dark floating surfaces use a restrained offset soft shadow. Their depth separates them from the map. Do not add decorative glows or blur washes.
 
-The required map supports flat 2D and genuine Three.js/WebGL 3D. Use Three.js directly or a geospatial framework built on Three.js, with actual scene geometry, cameras, depth testing, and geographically anchored drone overlays. The current Canvas2D software projection is a legacy prototype and does not satisfy this requirement. Replace it after the user reviews the map-engine shortlist; do not start that migration before selection.
+The selected engine is MapLibre GL JS with a genuine Three.js/WebGL custom layer. MapLibre supplies geographic navigation and a flat or pitched map; Three.js supplies scene geometry, a camera aligned with MapLibre, depth testing, analysis columns, and the demo drone. The Canvas2D software projector has been removed. Keep both views in the same Mercator coordinate system; a spherical-globe custom-layer integration is outside the current local demo.
 
-Keep terrain elevation separate from analysis-column height. Elevation requires an elevation dataset; soil or vegetation overlays require their own supporting observations. Preserve consistent geographic positioning across 2D and 3D modes. See `docs/MAP_OPTIONS.md` for the researched options and data-source distinctions.
+Keep terrain elevation separate from analysis-column height. Elevation requires an elevation dataset; soil or vegetation overlays require their own supporting observations. Preserve consistent geographic positioning across 2D and 3D modes. The demo centre, supplied corners, and coordinate conventions are recorded in `docs/DEMO_AREA.md`. The basemap currently uses OpenFreeMap; no satellite imagery or terrain elevation dataset is enabled.
 
 Motion explains interaction: map navigation, projection changes, and replay movement. Avoid idle pulsing, entrance sequences, and ornament. Respect reduced-motion preferences.
 
@@ -103,8 +103,8 @@ Check for an existing component before adding one. Reuse a working module or ext
 
 | Component | Existing implementation | Reuse rule |
 | --- | --- | --- |
-| Field map | `dashboard/map.mjs`, `createFieldMap` | Existing interaction boundary can be retained while replacing the legacy renderer with the selected Three.js-based approach |
-| Projection helper | Legacy `projectPoint` in `map.mjs` | Retire software projection in the 3D path; use the selected engine's geographic transforms and Three.js camera |
+| Field map | `dashboard/map.mjs`, `createFieldMap` | Keep the interaction boundary while using MapLibre sources/layers and the Three.js scene |
+| Geographic placement | `dashboard/geo.mjs` and MapLibre Mercator coordinates | Preserve supplied WGS84 positions; map temporary sample x/y through the geographic extent; use the engine camera in 3D |
 | Replay and filtering | `dashboard/survey.mjs` | Preserve interpolation and filtering rather than duplicating them in UI code |
 | Floating surface | `.floating-surface` in `dashboard/style.css` | Shared material for toolbar, modules, settings, and playback |
 | Module heading/disclosure | `.panel-heading` and `wireDisclosure` in `app.mjs` | Same collapse behaviour and accessible expanded state for layers and observations |

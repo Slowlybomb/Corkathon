@@ -1,34 +1,27 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { projectPoint, normaliseFeed } from './map.mjs';
+import { demoArea, localToLngLat, coordinatesFor, normaliseFeed, areaBounds } from './geo.mjs';
 
-test('flat projection preserves map positions and 3D height lifts columns', () => {
-  const camera = { x: 100, y: 200, scale: 2, angle: 0, pitch: 0 };
-  assert.deepEqual(projectPoint(510, 460, 0, camera), { x: 120, y: 220 });
-  const tilted = { ...camera, pitch: Math.PI / 3 };
-  const ground = projectPoint(500, 450, 0, tilted);
-  const raised = projectPoint(500, 450, 40, tilted);
-  assert.equal(ground.x, raised.x);
-  assert.ok(raised.y < ground.y - 60);
+test('sample grid corners map to the supplied geographic survey corners', () => {
+  assert.deepEqual(localToLngLat(0,0),[-8.261574,51.976123]);
+  assert.deepEqual(localToLngLat(1000,0),[-8.177723,51.975567]);
+  assert.deepEqual(localToLngLat(0,900),[-8.262424,51.924339]);
+  assert.deepEqual(localToLngLat(1000,900),[-8.178670,51.923784]);
+  const midpoint=localToLngLat(500,450);
+  assert.ok(Math.abs(midpoint[0]-demoArea.center.longitude)<.00001);
+  assert.ok(Math.abs(midpoint[1]-demoArea.center.latitude)<.00001);
 });
 
-test('feed accepts a list or findings wrapper and rejects malformed coordinates', () => {
-  const record = { label: 'Patch', position: { x: 400, y: 300 } };
-  assert.equal(normaliseFeed([record])[0].title, 'Patch');
-  assert.equal(normaliseFeed({ findings: [record] })[0].x, 400);
-  assert.deepEqual(normaliseFeed({ findings: [{ title: 'Bad', x: 'oops', y: 1 }] }), []);
-  assert.deepEqual(normaliseFeed({ status: 'ready' }), []);
-  assert.deepEqual(normaliseFeed([{ title: 'Outside', x: 10001, y: 0 }]), []);
+test('geographic coordinates take priority over disposable sample x/y', () => {
+  assert.deepEqual(coordinatesFor({longitude:-8.22,latitude:51.95,x:0,y:0}),[-8.22,51.95]);
+  assert.deepEqual(areaBounds(),[[-8.262424,51.923784],[-8.177723,51.976123]]);
 });
 
-test('fit keeps the field inside phone and short landscape viewports', async () => {
-  const { fitCamera } = await import('./map.mjs');
-  for (const [width,height] of [[390,844],[844,390],[1440,900]]) for (const view of ['2d','3d']) {
-    const camera=fitCamera(width,height,view);
-    for (const [x,y] of [[265,148],[778,225],[700,753],[215,657]]) {
-      const point=projectPoint(x,y,0,camera);
-      assert.ok(point.x>=19 && point.x<=width-19, `${view}: x=${point.x}`);
-      assert.ok(point.y>=103 && point.y<=height-127, `${view}: y=${point.y}`);
-    }
-  }
+test('feed accepts geographic records and legacy sample records, rejecting bad positions', () => {
+  const record={label:'Patch',position:{x:400,y:300}};
+  assert.equal(normaliseFeed([record])[0].title,'Patch');
+  assert.equal(normaliseFeed({findings:[record]})[0].x,400);
+  assert.deepEqual(coordinatesFor(normaliseFeed({observations:[{title:'Ground',lat:51.949961,lon:-8.220098}]})[0]),[-8.220098,51.949961]);
+  assert.equal(normaliseFeed({label:'Point',coordinates:[-8.22,51.95]})[0].latitude,51.95);
+  for(const input of [{status:'ready'},[{x:'oops',y:1}],[{x:10001,y:0}],[{lat:95,lon:-8.22}],[{lat:null,lon:-8.22}]])assert.deepEqual(normaliseFeed(input),[]);
 });

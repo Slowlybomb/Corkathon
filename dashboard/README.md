@@ -6,34 +6,37 @@ From the repository root:
 python3 -m http.server 5173 --directory dashboard
 ```
 
-Open http://localhost:5173. No install or build step is required. Serve over HTTP for JavaScript modules.
+Open http://localhost:5173. No installation or build step is required. Internet access and WebGL2 are required: MapLibre GL JS 5.6.2, Three.js 0.180.0, map styles/tiles, and optional fonts load from external services. A visible notice reports library or map-source loading failure.
 
-The map fills the viewport. Floating modules contain layers, findings, connection settings, and replay. The document never scrolls; long panels scroll internally. On phones, layers and observations initially collapse.
+The map starts at **latitude 51.949961, longitude -8.220098**. The exact supplied corners and UTM29N references are in [DEMO_AREA.md](../docs/DEMO_AREA.md) and `geo.mjs`.
 
-- Switch between flat 2D and projected 3D. Drag to pan, Shift-drag to rotate 3D, scroll or use buttons to zoom, and use Fit to reset.
-- Select findings in the map or accessible list. Play, pause, scrub, change replay speed, or export the current findings.
-- Open Demo source for connection setup. Sample survey works offline. Phone / AI feed opens a real WebSocket and reports connection/error states.
+## Controls
 
-## Sample data and feed
+- Switch between flat 2D and pitched 3D. MapLibre controls the map; a Three.js WebGL custom layer renders analysis meshes and the drone. The Canvas2D projector is removed.
+- Drag to pan, right-drag or Ctrl-drag to rotate/tilt, scroll or use buttons to zoom, and Fit to show the full demo extent. Touch navigation uses MapLibre's native gestures.
+- Select findings on the map or in the accessible list. Play/pause, scrub, change replay speed, and export findings.
+- Open Demo source for the compact connection panel. Phone / AI feed opens a real WebSocket and shows connection and error states.
 
-`sample-data.mjs` holds six hand-authored observations and a simulated route. Change it freely; this is not an integration schema. Map artwork is an original schematic. 3D sample-column height is illustrative intensity, not terrain or a measured property. No AI analysis or real flight runs here.
+The page does not scroll. Long floating panels scroll internally; on compact screens, layers and observations initially collapse.
 
-The temporary feed adapter accepts an array, `{findings: [...]}`, `{observations: [...]}`, or a single observation. It accepts a `title` or `label`, and map-local `x`/`y` either directly or inside `position`. The schematic spans x=0–1000 and y=0–900; latitude/longitude is not mapped yet. Optional description, action, time, and layer are used if available. Invalid messages retain the last observations, and feed text is escaped before display. Received findings are unvalidated and disable the synthetic heatmap. The replay route remains simulated.
+## Data and module reuse
 
-Example only:
+`sample-data.mjs` holds six hand-authored findings and a simulated route. Edit freely: this is not an integration schema. `geo.mjs` contains supplied coordinates, temporary sample-grid placement, and the permissive feed adapter. `survey.mjs` retains replay/filter logic. `map.mjs` owns the MapLibre/Three.js bridge; `app.mjs` coordinates the UI.
+
+The feed accepts an array, `{findings: [...]}`, `{observations: [...]}`, or one observation. Positions may use longitude/latitude, lon/lat, lng/lat, `coordinates: [lon,lat]`, or those fields inside `position`. Legacy x/y samples still work. Text is escaped, malformed messages retain previous observations, and results remain unvalidated.
 
 ```json
-{"observations":[{"label":"Patch to inspect","position":{"x":420,"y":350},"description":"Review the source image."}]}
+{"observations":[{"label":"Patch to inspect","latitude":51.949961,"longitude":-8.220098,"description":"Review the source image."}]}
 ```
 
-No server is included; the AI teammate owns the feed. Configure its ws:// or wss:// address when available. HTTPS pages require wss://. Settings are session-only.
+No feed server is included. Configure ws:// or wss:// when the AI teammate has one; HTTPS requires wss://. Settings are session-only.
 
-## Reuse and checks
+OpenFreeMap is a drawn geographic basemap, not satellite imagery. No terrain elevation model is enabled. The analysis columns, drone size and altitude, and replay are illustrative. Received observations disable the synthetic analysis surface. Map attribution remains visible.
 
-Read [DESIGN.md](../DESIGN.md) before UI work. Reuse `map.mjs`, `survey.mjs`, floating-panel styles, and native controls before adding modules. The optional Manrope font falls back to local fonts without network access.
+## Checks
 
 ```sh
 node --test dashboard/*.test.mjs
 ```
 
-Browser rendering still needs review on the user's machine: the development sandbox blocked both the HTTP port and Chromium launch.
+These check corner placement, coordinate priority, malformed feed handling, replay interpolation, filtering, and source-selection consistency. They do not constitute a WebGL integration test. Browser rendering still needs review on the user's machine because the sandbox blocked preview-server binding and Chromium launch.

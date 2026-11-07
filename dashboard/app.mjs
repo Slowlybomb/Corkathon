@@ -1,6 +1,7 @@
 import { survey as sample } from './sample-data.mjs';
 import { findingsForLayer, retainSelection } from './survey.mjs';
-import { createFieldMap, normaliseFeed } from './map.mjs';
+import { createFieldMap } from './map.mjs';
+import { normaliseFeed, coordinatesFor, demoArea } from './geo.mjs';
 
 const $ = selector => document.querySelector(selector);
 const survey = structuredClone(sample);
@@ -8,7 +9,7 @@ let selected = survey.findings[0]?.id, layer = 'all', elapsed = 0, playing = fal
 let socket = null, toastTimer, demo = true;
 const formatTime = value => `${String(Math.floor(value/60)).padStart(2,'0')}:${String(Math.floor(value%60)).padStart(2,'0')}`;
 const escape = value => String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
-const map = createFieldMap($('#map'),survey,selectFinding);
+const map = createFieldMap($('#map'),survey,selectFinding,message=>{const notice=$('#map-notice');notice.hidden=!message;notice.textContent=message??'';});
 
 function renderFindings(){
   const findings=findingsForLayer(survey.findings,layer);
@@ -28,7 +29,7 @@ function renderFindings(){
 function updateSourceLabels(){
   const view=$('#view-2d').getAttribute('aria-pressed')==='true'?'2D':'3D';
   $('#map-mode-label').textContent=`${view} ${demo?'sample':'feed'} view`;
-  $('#survey-context').textContent=`Cork, Ireland · ${demo?'Sample survey':'Feed observations'}`;
+  $('#survey-context').textContent=`51.949961, −8.220098 · ${demo?'Sample survey':'Feed observations'}`;
   $('#legend-note').textContent=layer==='soil'?'No supported soil-property data':demo?'Illustrative intensity · not a measurement':'Feed locations · no measured intensity';
   $('.legend-scale').hidden=!demo;
 }
@@ -78,7 +79,7 @@ wireDisclosure('#layers-toggle','#layer-content');wireDisclosure('#observations-
 if(matchMedia('(max-width:700px), (max-height:560px)').matches){$('#layers-toggle').click();$('#observations-toggle').click();}
 function showToast(message){$('#toast').textContent=message;$('#toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').hidden=true,3200);}
 $('#export').onclick=()=>{
-  const url=URL.createObjectURL(new Blob([JSON.stringify({...survey,note:demo?'Illustrative sample; no AI analysis or flight.':'Feed observations unvalidated; route remains simulated.'},null,2)],{type:'application/json'}));
+  const url=URL.createObjectURL(new Blob([JSON.stringify({...survey,area:demoArea,findings:survey.findings.map(finding=>({...finding,longitude:coordinatesFor(finding)[0],latitude:coordinatesFor(finding)[1]})),note:demo?'Illustrative sample; no AI analysis or flight.':'Feed observations unvalidated; route remains simulated.'},null,2)],{type:'application/json'}));
   const link=document.createElement('a');link.href=url;link.download='corkathon-survey.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);showToast('Findings exported');
 };
 const setup=$('#connection-panel'),setupToggle=$('#connection-toggle');
@@ -93,7 +94,7 @@ $('#connection-form').onsubmit=event=>{
   if($('#source').value==='demo'){
     if(socket){socket.onclose=null;socket.close();socket=null;}
     survey.findings=structuredClone(sample.findings);survey.source=sample.source;survey.illustrative=true;demo=true;selected=survey.findings[0]?.id;playing=false;elapsed=0;map.setSurvey(survey);renderFindings();updateReplay();
-    $('#source-credit').textContent='Sample data · illustrative map & simulated positions';connectionStatus('Using six hand-authored observations.','Demo source');showToast('Sample survey loaded');return;
+    $('#source-credit').textContent='Real map · sample observations & simulated route';connectionStatus('Using six hand-authored observations.','Demo source');showToast('Sample survey loaded');return;
   }
   let address;try{address=new URL($('#endpoint').value);if(!['ws:','wss:'].includes(address.protocol))throw new Error();if(location.protocol==='https:'&&address.protocol==='ws:')throw new Error();}catch{connectionStatus('Enter a valid ws:// or wss:// address. HTTPS pages require wss://.','Not connected','failed');return;}
   let current;
@@ -101,11 +102,11 @@ $('#connection-form').onsubmit=event=>{
   if(socket){socket.onclose=null;socket.close();}
   socket=current;
   connectionStatus('Opening connection…','Connecting');
-  current.onopen=()=>{if(socket!==current)return;connectionStatus('Connected. Waiting for observations with map x/y positions.','Connected','connected');};
+  current.onopen=()=>{if(socket!==current)return;connectionStatus('Connected. Waiting for observations with latitude/longitude positions.','Connected','connected');};
   current.onmessage=event=>{
     if(socket!==current)return;
-    try{const findings=normaliseFeed(JSON.parse(event.data));if(!findings.length){connectionStatus('Message received, but no usable map x/y observations. Existing data retained.','Connected','connected');return;}
-      survey.findings=findings;survey.source='Connected WebSocket feed';survey.illustrative=false;demo=false;selected=findings[0].id;playing=false;map.setSurvey(survey);renderFindings();updateReplay();$('#source-credit').textContent='Feed observations · illustrative map & simulated route';connectionStatus(`Received ${findings.length} observations. Results remain unvalidated.`,'Connected','connected');
+    try{const findings=normaliseFeed(JSON.parse(event.data));if(!findings.length){connectionStatus('Message received, but no usable geographic or sample-grid positions. Existing data retained.','Connected','connected');return;}
+      survey.findings=findings;survey.source='Connected WebSocket feed';survey.illustrative=false;demo=false;selected=findings[0].id;playing=false;map.setSurvey(survey);renderFindings();updateReplay();$('#source-credit').textContent='Real map · unvalidated feed & simulated route';connectionStatus(`Received ${findings.length} observations. Results remain unvalidated.`,'Connected','connected');
     }catch{connectionStatus('Message could not be read as JSON. Existing observations retained.','Connected','connected');}
   };
   current.onerror=()=>{if(socket===current)connectionStatus('Connection failed. Check the address and that the phone or AI feed is running.','Connection failed','failed');};

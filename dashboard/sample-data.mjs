@@ -1,7 +1,7 @@
 // Disposable example data. Change this freely when the AI teammate has output.
 export const survey = {
   illustrative: true,
-  name: 'South meadow', location: 'Cork · Illustrative field', date: '7 November 2026',
+  name: 'Cork demo area', location: '51.949961, -8.220098', date: '7 November 2026',
   duration: 150, source: 'Hand-authored sample',
   route: [
     { time: 0, x: 320, y: 220 }, { time: 25, x: 690, y: 280 },

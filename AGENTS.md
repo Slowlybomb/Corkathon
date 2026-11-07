@@ -22,7 +22,7 @@ The AI and dashboard assignments are confirmed by the project owner. The third t
 
 - Read [DESIGN.md](DESIGN.md) before changing dashboard UI. It records the user's fixed palette, fullscreen map, floating modules, 2D/3D views, and no-page-scroll requirement. It supersedes conflicting earlier visual proposals.
 - Before creating a UI module, inspect the existing renderer, replay/filter helpers, floating-panel styles, disclosure behaviour, and buttons. Reuse or extend these first.
-- The user requires Three.js for genuine 3D. The Canvas2D projection is a legacy prototype. Review `docs/MAP_OPTIONS.md` and wait for map-engine selection before migrating the renderer; keep the approved palette and floating fullscreen-map layout.
+- The user selected MapLibre + Three.js. Use the real WebGL custom layer, not Canvas2D projection. The demo centre is latitude 51.949961, longitude -8.220098; preserve the supplied extent in `dashboard/geo.mjs` and `docs/DEMO_AREA.md`. Keep the approved palette and floating fullscreen-map layout.
 
 - Codex should focus implementation on the web app and dashboard. Claude's AI work is owned by the AI teammate; coordinate changes across these areas with their owner.
 - Preserve concurrent work by other teammates and agents. Do not overwrite or revert their changes to make the workspace match an earlier state.

@@ -36,3 +36,11 @@ button,input,select{font:inherit}button{cursor:pointer;color:inherit;border:0;ba
   .observations-panel{top:78px;max-height:calc(100dvh - 196px)}
   .replay-panel{bottom:30px;height:68px}.map-tools{bottom:114px}
 }
+/* MapLibre owns the map canvas; floating modules retain the approved system. */
+#map{cursor:auto}
+#map .maplibregl-canvas{outline-offset:-3px}
+#map .maplibregl-control-container .maplibregl-ctrl-bottom-right{bottom:118px;right:24px;z-index:1}
+#map .maplibregl-ctrl-attrib{background:var(--cream);color:var(--ink);font-size:10px;border-radius:5px;max-width:250px}
+#map .maplibregl-ctrl-attrib a{color:var(--forest)}
+.map-notice{position:absolute;top:105px;left:50%;transform:translateX(-50%);z-index:5;padding:12px 16px;font-size:12px;max-width:min(440px,80vw);line-height:1.6}
+@media(max-width:700px){#map .maplibregl-control-container .maplibregl-ctrl-bottom-right{bottom:220px;right:12px}.map-notice{top:125px;max-width:calc(100vw - 32px)}}

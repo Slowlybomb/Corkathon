@@ -77,10 +77,10 @@ export function createPhoneLink({bluetooth=globalThis.navigator?.bluetooth,onSta
       await write({v:1,type:'command',command:'hello',pin});
     }catch(error){if(session===epoch)disconnect();throw error;}
   }
-  async function send(command,id=globalThis.crypto.randomUUID()){
+  async function send(command,id=globalThis.crypto.randomUUID(),extra={}){
     if(!ready)throw new Error('Connect the camera module first.');
-    if(!['ping','capture','stop_camera'].includes(command))throw new Error('Unsupported camera module command.');
-    await write({v:1,type:'command',command,id});return id;
+    if(!['ping','capture','stop_camera','results','results_layer'].includes(command))throw new Error('Unsupported camera module command.');
+    await write({...extra,v:1,type:'command',command,id});return id;
   }
   return {connect,disconnect,send};
 }

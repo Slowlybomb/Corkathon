@@ -153,7 +153,7 @@ async function loadSatellite(loaded,name){
   cancelSceneLoad();const request=sceneRequest;
   // Stop the old feed now; its displayed findings stay until the scene succeeds.
   if(socket){const previous=socket;socket=null;previous.onmessage=null;previous.onclose=null;previous.close();}
-  sceneController=new AbortController();const options={signal:sceneController.signal};
+  sceneController=new AbortController();const options={signal:sceneController.signal,fetcher:loaded?.fetcher};
   $('#scene-layer').disabled=true;$('#scene-layer-status').textContent='Loading satellite layer…';
   connectionStatus('Loading satellite export… Existing observations remain until it is ready.','Loading scene');
   try{
@@ -181,6 +181,12 @@ window.addEventListener('phone-image',event=>{
 });
 window.addEventListener('phone-telemetry',event=>{droneTelemetry=event.detail;map.setTelemetry(droneTelemetry);dronePanel.setSample(droneTelemetry);});
 window.addEventListener('phone-locate',()=>map.locateDrone());
+function setFollow(on){
+  if(on&&$('#view-3d').getAttribute('aria-pressed')!=='true')$('#view-3d').click();
+  map.setFollow(on);$('#drone-follow').setAttribute('aria-pressed',on);$('#drone-follow').classList.toggle('active',on);$('#drone-follow-note').hidden=!on;
+}
+$('#drone-follow').onclick=()=>setFollow($('#drone-follow').getAttribute('aria-pressed')!=='true');
+window.addEventListener('phone-results',event=>{loadSatellite(event.detail,'ph_0-5cm').then(()=>{if(survey.scene?.manifestUrl===event.detail.url)map.fit();});});
 function receiveObservations(message,source){
   const findings=normaliseFeed(message);
   if(!findings.length)return false;
@@ -193,6 +199,7 @@ window.addEventListener('phone-observations',event=>{
 });
 window.addEventListener('phone-link-state',event=>{
   droneTelemetry=null;if(event.detail.connected||phoneConnected){map.setTelemetry(null);dronePanel.setConnection(event.detail.connected);}phoneConnected=event.detail.connected;
+  if(!event.detail.connected)setFollow(false);
   if(!event.detail.connected&&survey.source==='Bluetooth camera module')connectionStatus('Bluetooth disconnected. Last observations retained.','Disconnected','failed');
 });
 $('#connection-form').onsubmit=event=>{

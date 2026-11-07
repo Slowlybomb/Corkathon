@@ -1,5 +1,6 @@
 import { createPhoneLink, cameraImageEvidence } from './phone.mjs';
 import { readTelemetry, telemetryAt } from './telemetry.mjs';
+import { createResultsClient } from './phone-results.mjs';
 
 const $=selector=>document.querySelector(selector);
 let connected=false,pending=null,timer,bytes=0,receiving=false;
@@ -24,13 +25,13 @@ function failed(error){const message=error.message??String(error);$('#phone-stat
 const link=createPhoneLink({
   onState(state,name){
     connected=state==='connected';
-    if(!connected)telemetry=null;
+    if(!connected){telemetry=null;results?.reset();}
     renderTelemetry();
     $('#phone-status').textContent=({disconnected:'Disconnected. Start Bluetooth in the Android app.',connecting:'Choose the camera module in the Bluetooth device picker…',authenticating:'Checking the camera module connection code…',connected:`Connected to ${name??'camera module'} over Bluetooth LE.`})[state];
     $('#phone-dot').className=`status-dot ${connected?'connected':''}`;
     $('#phone-connect').disabled=state!=='disconnected';$('#phone-pin').disabled=state!=='disconnected';
     $('#phone-disconnect').disabled=state==='disconnected';
-    for(const id of ['ping','capture','stop'])$(`#phone-${id}`).disabled=!connected;
+    for(const id of ['ping','capture','stop','results'])$(`#phone-${id}`).disabled=!connected;
     if(!connected){finish('Capture requires a connected camera module.');$('#phone-camera').textContent='Unknown';$('#phone-battery').textContent='Unknown';$('#phone-model').textContent='Not connected';$('#phone-link-mode').textContent='Bluetooth LE';}
     log(state);
     window.dispatchEvent(new CustomEvent('phone-link-state',{detail:{connected}}));
@@ -42,11 +43,12 @@ const link=createPhoneLink({
   },
   onPacket(packet,transitMs){
     if(packet.v!==1){log('Ignored unsupported packet version');return;}
+    if(results.handle(packet))return;
     switch(packet.type){
       case 'ready':log('Camera module code accepted');break;
       case 'status':
         $('#phone-camera').textContent=packet.camera==='capturing'?'Capturing':packet.camera==='off'?`Off · ${packet.armed?'requests allowed':'requests blocked'}`:'Unknown';
-        $('#phone-model').textContent=packet.model==='not_connected'?'Not connected':'Status unavailable';
+        $('#phone-model').textContent=({results_ready:'Results ready on the phone',on_device:'On the phone · run a survey',not_connected:'Not connected'})[packet.model]??'Status unavailable';
         $('#phone-battery').textContent=typeof packet.battery==='number'&&packet.battery>=0&&packet.battery<=100?`${packet.battery}%`:'Unknown';
         $('#phone-link-mode').textContent=packet.simulatedBps===1000?'BLE · simulated 1 kbit/s limit':'Bluetooth LE · no LoRa simulation';
         break;
@@ -73,6 +75,16 @@ const link=createPhoneLink({
     }
   },
 });
+const results=createResultsClient({send:(command,id,extra)=>link.send(command,id,extra)});
+$('#phone-results').onclick=async()=>{
+  $('#phone-results').disabled=true;$('#phone-results-status').textContent='Asking the phone for its model results…';
+  try{
+    const scene=await results.requestScene();
+    $('#phone-results-status').textContent=`${scene.layers.length} layers computed on the phone. Each layer is requested over Bluetooth when chosen in Field layers.`;
+    log('Model result list received');window.dispatchEvent(new CustomEvent('phone-results',{detail:scene}));
+  }catch(error){$('#phone-results-status').textContent=error.message;failed(error);}
+  finally{$('#phone-results').disabled=!connected;}
+};
 $('#phone-form').onsubmit=async event=>{event.preventDefault();try{await link.connect($('#phone-pin').value.trim());}catch(error){failed(error);}};
 $('#phone-disconnect').onclick=()=>link.disconnect();
 $('#phone-locate').onclick=()=>window.dispatchEvent(new Event('phone-locate'));
@@ -87,4 +99,4 @@ $('#phone-stop').onclick=async()=>{try{await link.send('stop_camera');finish('Ca
 window.addEventListener('pagehide',()=>link.disconnect());
 window.addEventListener('phone-disconnect',()=>link.disconnect());
 if(!navigator.bluetooth){$('#phone-connect').disabled=true;$('#phone-support').textContent='Bluetooth access is unavailable here. Use desktop Chrome on localhost or HTTPS, and enable Bluetooth.';}
-log('No model is connected. No synthetic findings are sent.');
+log('Model results come only from a survey computed on the phone. No synthetic findings are sent.');

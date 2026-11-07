@@ -12,7 +12,7 @@ export function createFieldMap(container,initialSurvey,onSelect,onStatus=()=>{},
   const maplibregl=window.maplibregl;
   if(!maplibregl)throw new Error('MapLibre did not load');
   let survey=initialSurvey,layer='all',selected=survey.findings[0]?.id,view='3d',ready=false,basemap='satellite';
-  let liveTelemetry=null,located=false;
+  let liveTelemetry=null,located=false,follow=false,flight=null,followFrame=0,lastFrame=0;
   const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
   const map=new maplibregl.Map({
     container,style:'https://tiles.openfreemap.org/styles/liberty',
@@ -34,7 +34,7 @@ export function createFieldMap(container,initialSurvey,onSelect,onStatus=()=>{},
   let renderer,mixer,droneAsset,modelGeneration=0,modelRequested=false,analysis,analysisError=null;
   let analysisOptions={};
   function ensureDroneModel(){
-    if(!renderer||!telemetryAt(liveTelemetry).location||modelRequested)return;
+    if(!renderer||(!follow&&!telemetryAt(liveTelemetry).location)||modelRequested)return;
     modelRequested=true;
     const generation=++modelGeneration;
     loadDroneModel().then(asset=>{
@@ -76,6 +76,7 @@ export function createFieldMap(container,initialSurvey,onSelect,onStatus=()=>{},
     const current=telemetryAt(liveTelemetry),point=current.location;
     const plottable=point&&Math.abs(point.latitude)<=85;
     if(ready)map.getSource('drone-position').setData(collection(plottable?[feature({type:'Point',coordinates:[point.longitude,point.latitude]},{source:'phone-gps',accuracyM:point.accuracyM})]:[]));
+    if(follow){map.triggerRepaint();return;}
     const attitude=droneQuaternion(current.orientation);
     // GPS without attitude remains a point; no fabricated yaw, tilt, altitude, or rotor motion.
     drone.visible=Boolean(plottable&&attitude)&&view==='3d';
@@ -85,6 +86,41 @@ export function createFieldMap(container,initialSurvey,onSelect,onStatus=()=>{},
       if(ready&&!located){located=true;locateDrone();}
     }
     mixer?.setTime(0);map.triggerRepaint();
+  }
+  const corners=[demoArea.topLeft,demoArea.topRight,demoArea.bottomLeft,demoArea.bottomRight];
+  const area={west:Math.min(...corners.map(p=>p.longitude)),east:Math.max(...corners.map(p=>p.longitude)),south:Math.min(...corners.map(p=>p.latitude)),north:Math.max(...corners.map(p=>p.latitude))};
+  const insideArea=point=>Boolean(point)&&point.longitude>=area.west&&point.longitude<=area.east&&point.latitude>=area.south&&point.latitude<=area.north;
+  function stepFollow(now){
+    if(!follow||!flight)return;
+    const dt=Math.min(.1,Math.max(0,(now-lastFrame)/1000));lastFrame=now;
+    const attitude=telemetryAt(liveTelemetry).orientation;
+    flight.live=Boolean(attitude)&&[attitude.headingDeg,attitude.pitchDeg,attitude.rollDeg].every(Number.isFinite);
+    if(flight.live){
+      const k=1-Math.exp(-dt/.25);
+      flight.heading??=attitude.headingDeg;
+      flight.heading=(flight.heading+((attitude.headingDeg-flight.heading+540)%360-180)*k+360)%360;
+      flight.pitch+=(attitude.pitchDeg-flight.pitch)*k;flight.roll+=(attitude.rollDeg-flight.roll)*k;
+    }
+    const heading=flight.heading??0,h=heading*Math.PI/180,metresPerLon=111320*Math.cos(flight.latitude*Math.PI/180);
+    const tilt=value=>Math.abs(value)<4?0:Math.max(-1,Math.min(1,(value-Math.sign(value)*4)/25));
+    const forward=flight.live?tilt(flight.pitch)*30:0,side=flight.live?tilt(flight.roll)*30:0;
+    flight.latitude=Math.max(area.south,Math.min(area.north,flight.latitude+(forward*Math.cos(h)-side*Math.sin(h))*dt/111320));
+    flight.longitude=Math.max(area.west,Math.min(area.east,flight.longitude+(forward*Math.sin(h)+side*Math.cos(h))*dt/metresPerLon));
+    drone.position.copy(local(flight,120));
+    const pose=droneQuaternion({headingDeg:heading,pitchDeg:flight.pitch,rollDeg:flight.roll});if(pose)drone.quaternion.fromArray(pose);
+    drone.visible=view==='3d';ensureDroneModel();
+    map.jumpTo({center:[flight.longitude+80*Math.sin(h)/metresPerLon,flight.latitude+80*Math.cos(h)/111320],bearing:heading,
+      pitch:Math.max(40,Math.min(68,60-flight.pitch*.3)),zoom:16.4,roll:flight.roll*.4});
+    followFrame=requestAnimationFrame(stepFollow);
+  }
+  function setFollow(on){
+    if(on===follow)return;
+    follow=on;cancelAnimationFrame(followFrame);
+    if(on){
+      const point=telemetryAt(liveTelemetry).location,start=insideArea(point)?point:demoArea.center;
+      flight={latitude:start.latitude,longitude:start.longitude,heading:null,pitch:0,roll:0,live:false};
+      lastFrame=performance.now();followFrame=requestAnimationFrame(stepFollow);
+    }else{flight=null;if(ready)map.easeTo({roll:0,duration:reduced?0:300});updateTelemetryPosition();}
   }
   function fit(){
     const bounds=surveyBounds(survey);
@@ -155,7 +191,7 @@ export function createFieldMap(container,initialSurvey,onSelect,onStatus=()=>{},
     setLayer(value){layer=value;updateData();},setSelected(value){selected=value;if(ready)map.setPaintProperty('finding-points','circle-color',['case',['==',['get','id'],selected??''],'#fefee3','#2c6e49']);},
     setSurvey(value){survey=value;updateData();},
     setTelemetry(value){liveTelemetry=value;if(!value)located=false;updateTelemetryPosition();},
-    locateDrone,
+    locateDrone,setFollow,
     zoomBy(factor){map.easeTo({zoom:map.getZoom()+Math.log2(factor),duration:reduced?0:200});},fit,
   };
 }

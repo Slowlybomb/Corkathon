@@ -210,7 +210,7 @@ public final class MainActivity extends Activity {
             if(value.optInt("v")!=1||!"command".equals(value.optString("type")))throw new IllegalArgumentException("Unsupported packet version or type");
             if(!authenticated){
                 if(!"hello".equals(name)||!pin.equals(value.optString("pin"))||!subscribed){log("Connection code rejected");server.cancelConnection(peer);return;}
-                authenticated=true;test.setEnabled(true);status.setText("Ground station connected");log("Connection code accepted");send(packet("ready","model","not_connected"));sendStatus();return;
+                authenticated=true;test.setEnabled(true);status.setText("Ground station connected");log("Connection code accepted");send(packet("ready","model",modelState()));sendStatus();return;
             }
             log("Received: "+name);
             switch(name){
@@ -222,15 +222,24 @@ public final class MainActivity extends Activity {
                     camera.capture(jpeg->{String completed=captureId;captureId=null;updateCamera();log("Captured "+jpeg.length+" bytes; camera off; sending image");send(packet("image","id",completed,"capturedAt",System.currentTimeMillis(),"location",telemetry.snapshot().opt("location"),"mime","image/jpeg","base64",Base64.encodeToString(jpeg,Base64.NO_WRAP)));sendStatus();},message->{captureId=null;updateCamera();log(message);send(packet("error","id",id,"message",message));sendStatus();});
                     updateCamera();break;
                 case "stop_camera":cancelCapture("Stopped from dashboard");sendStatus();break;
+                case "results":sendResults(id,null);break;
+                case "results_layer":sendResults(id,value.optString("layer"));break;
                 default:send(packet("error","id",id,"message","Unsupported command"));
             }
         }catch(Exception exception){log("Rejected command: "+exception.getMessage());send(packet("error","message","Invalid command packet"));}
     }
+    private void sendResults(String id,String layer){
+        ResultServer.Survey survey=ResultServer.latest;
+        if(survey==null){send(packet("error","id",id,"message","No model results yet. Run Survey Cork area in the model screen first."));return;}
+        try{send(layer==null?ResultServer.header(survey,id):ResultServer.layerPacket(survey,id,layer));log(layer==null?"Sent model result list":"Sent model layer "+layer);}
+        catch(Exception exception){send(packet("error","id",id,"message","Model results unavailable: "+exception.getMessage()));}
+    }
+    private String modelState(){return ResultServer.latest==null?"on_device":"results_ready";}
     private void cancelCapture(String reason){String cancelled=captureId;captureId=null;camera.stop();updateCamera();if(cancelled!=null){log(reason);send(packet("error","id",cancelled,"message",reason));}}
     private void updateCamera(){cameraStatus.setText(camera.active?"Capturing one image…":armed.isChecked()?"Camera off · requests allowed":"Camera off · requests blocked");}
     private void sendStatus(){
         BatteryManager battery=getSystemService(BatteryManager.class);int percent=battery.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY);
-        send(packet("status","camera",camera.active?"capturing":"off","armed",armed.isChecked(),"model","not_connected","battery",percent>=0&&percent<=100?percent:JSONObject.NULL,"simulatedBps",limited.isChecked()?1000:JSONObject.NULL));
+        send(packet("status","camera",camera.active?"capturing":"off","armed",armed.isChecked(),"model",modelState(),"battery",percent>=0&&percent<=100?percent:JSONObject.NULL,"simulatedBps",limited.isChecked()?1000:JSONObject.NULL));
     }
     private void publishTelemetry(){
         JSONObject reading=telemetry.snapshot();

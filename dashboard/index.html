@@ -55,6 +55,8 @@
         <div class="phone-actions"><button id="phone-locate" class="button" type="button" disabled>Locate drone</button></div>
         <div class="phone-actions"><button id="phone-ping" class="button" disabled>Test connection</button><button id="phone-capture" class="button primary" disabled>Request image</button><button id="phone-stop" class="button" disabled>Stop camera</button></div>
         <p id="phone-request-status" class="phone-note" role="status">Capture starts only when requested and allowed on the camera module.</p>
+        <div class="phone-actions"><button id="phone-results" class="button primary" disabled>Get model results</button></div>
+        <p id="phone-results-status" class="phone-note" role="status">Run Survey Cork area on the phone, return to its camera module screen, then get the results here.</p>
         <figure id="phone-image-wrap" hidden><img id="phone-image" alt="Requested camera module capture"><figcaption id="phone-image-caption"></figcaption></figure>
         <details><summary>Connection log</summary><ol id="phone-log" class="phone-log" aria-label="Camera module connection log"></ol></details>
       </div>
@@ -92,6 +94,8 @@
       <dl class="attitude-readings"><div><dt>Pitch</dt><dd id="drone-pitch">—</dd></div><div><dt>Roll</dt><dd id="drone-roll">—</dd></div><div><dt id="drone-heading-reference">Heading</dt><dd id="drone-heading">—</dd></div></dl>
       <div class="telemetry-position"><span>Phone GPS</span><strong id="drone-position-reading">Waiting for phone GPS</strong><small id="drone-gps-quality">No geographic position displayed</small></div>
       <button id="drone-locate" class="icon-button" aria-label="Locate drone on map" title="Locate drone on map" disabled><svg class="icon"><use href="#i-target"/></svg></button>
+      <button id="drone-follow" class="button" type="button" aria-pressed="false">Follow drone</button>
+      <p id="drone-follow-note" class="phone-note" hidden>Follow view: the phone's live orientation turns the drone and camera; tilting the phone flies it over the survey area. Position and movement are simulated.</p>
     </section>
     <footer class="map-credit"><span id="source-credit">No survey loaded</span></footer>
     <div id="analysis-tooltip" class="analysis-tooltip floating-surface" aria-hidden="true" hidden></div>

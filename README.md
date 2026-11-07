@@ -51,3 +51,5 @@ A file loads another with `require`, relative to itself: `mut cv = require("../l
 
 - `century/bin/century.exe` is the compiler built from C++ source on 28 Oct 2026 (`century_cpp.exe` in `E:\Prong\Century\CenturyWindows`). The newer self-hosted build there hangs on `deep.cy`, `policy.cy` and `trainstep.cy`; this one compiles everything in `lib/` and `examples/`.
 - `lib/models/gpt2.cy` reads its weights from `data/models/gpt2.safetensors`, which is not included (548 MB).
+
+We are working on analogue of OneSoil, that will 

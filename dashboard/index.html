@@ -39,6 +39,10 @@
       </form>
     </section>
     <div class="map-context"><span class="status-dot"></span><span id="map-mode-label">3D sample view</span><span class="map-context-divider">/</span><span>Cork demo area</span></div>
+    <div id="basemap-switch" class="basemap-switch view-switch floating-surface" role="group" aria-label="Basemap">
+      <button data-basemap="map" aria-pressed="false">Map</button>
+      <button data-basemap="satellite" class="active" aria-pressed="true">Satellite</button>
+    </div>
     <section class="floating-surface layers-panel" aria-labelledby="layer-title">
       <div class="panel-heading"><h2 id="layer-title"><svg class="icon"><use href="#i-layers"/></svg>Field layers</h2><button id="layers-toggle" class="icon-button" aria-expanded="true" aria-controls="layer-content" aria-label="Collapse field layers"><svg class="icon"><use href="#i-chevron"/></svg></button></div>
       <div id="layer-content">
@@ -66,7 +70,7 @@
       <div class="timeline-wrap"><input id="timeline" type="range" min="0" max="150" step="0.1" value="0" aria-label="Survey replay position"><div class="timeline-labels"><time id="elapsed">00:00</time><span id="reached">0 of 6 reached</span><time id="duration">02:30</time></div></div>
       <button id="speed" class="button speed-button" aria-label="Playback speed, 1 times">1×</button><span class="toolbar-divider"></span><button id="export" class="icon-button" aria-label="Export findings" title="Export findings"><svg class="icon"><use href="#i-download"/></svg></button>
     </section>
-    <footer class="map-credit"><span id="source-credit">Real map · sample observations & simulated route</span><span>Drag to explore <span>·</span> Right-drag to rotate in 3D</span></footer>
+    <footer class="map-credit"><span id="source-credit">Satellite · sample observations & simulated route</span><span>Drag to explore <span>·</span> Right-drag to rotate in 3D</span></footer>
     <div id="toast" class="toast floating-surface" role="status" hidden></div>
   </main>
   <script type="module">

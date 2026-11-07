@@ -78,7 +78,7 @@ Use Manrope with the declared local fallbacks. Short, sentence-case labels take 
 - Floating top toolbar: identity, selected field, survey context, connection setup.
 - Lower-left floating layer module: analysis selection and legend.
 - Upper-right floating observation module: a short list and selected finding details.
-- Lower-right projection and zoom controls.
+- A floating Map/Satellite control, plus lower-right projection and zoom controls.
 - Bottom replay module, inset from viewport edges, with a small source credit below.
 
 Maintain roughly 24 px desktop edge insets and 12 px on smaller screens. Controls should leave the central field usable. At phone sizes, modules initially collapse to headings and expand on demand; they must not force page scrolling. Connection setup is a small anchored panel, not a separate settings page.
@@ -89,7 +89,7 @@ Dark floating surfaces use a restrained offset soft shadow. Their depth separate
 
 The selected engine is MapLibre GL JS with a genuine Three.js/WebGL custom layer. MapLibre supplies geographic navigation and a flat or pitched map; Three.js supplies scene geometry, a camera aligned with MapLibre, depth testing, analysis columns, and the demo drone. The Canvas2D software projector has been removed. Keep both views in the same Mercator coordinate system; a spherical-globe custom-layer integration is outside the current local demo.
 
-Keep terrain elevation separate from analysis-column height. Elevation requires an elevation dataset; soil or vegetation overlays require their own supporting observations. Preserve consistent geographic positioning across 2D and 3D modes. The demo centre, supplied corners, and coordinate conventions are recorded in `docs/DEMO_AREA.md`. The basemap currently uses OpenFreeMap; no satellite imagery or terrain elevation dataset is enabled.
+Keep terrain elevation separate from analysis-column height. Elevation requires an elevation dataset; soil or vegetation overlays require their own supporting observations. Preserve consistent geographic positioning across 2D and 3D modes. The demo centre, supplied corners, and coordinate conventions are recorded in `docs/DEMO_AREA.md`. A shared Map/Satellite segmented control switches between OpenFreeMap and Esri World Imagery without resetting the camera, replay, observations, or Three.js scene. Satellite is the default. Keep provider attribution visible. No terrain elevation dataset is enabled.
 
 Motion explains interaction: map navigation, projection changes, and replay movement. Avoid idle pulsing, entrance sequences, and ornament. Respect reduced-motion preferences.
 
@@ -108,6 +108,7 @@ Check for an existing component before adding one. Reuse a working module or ext
 | Replay and filtering | `dashboard/survey.mjs` | Preserve interpolation and filtering rather than duplicating them in UI code |
 | Floating surface | `.floating-surface` in `dashboard/style.css` | Shared material for toolbar, modules, settings, and playback |
 | Module heading/disclosure | `.panel-heading` and `wireDisclosure` in `app.mjs` | Same collapse behaviour and accessible expanded state for layers and observations |
+| Basemap switch | `.view-switch` styling, `setBasemap` in `map.mjs` | Toggle the satellite raster layer above the drawn basemap and below survey overlays; do not replace the style or shared WebGL context |
 | Buttons | `.button`, `.primary`, `.icon-button` | Reuse size, hover, focus, and disabled treatment; icon-only controls require accessible names |
 | Observation list/detail | `renderFindings`, `renderDetail` in `app.mjs` | Reuse selected state and evidence labels; escape received text |
 | Connection setup | `#connection-panel` in `index.html` | Anchor to the toolbar; show actual connecting, connected, disconnected, and error states |

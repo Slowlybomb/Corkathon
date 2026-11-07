@@ -6,10 +6,10 @@ const colors=['#2c6e49','#4c956c','#fefee3','#ffc9b9','#d68c45'];
 const collection=features=>({type:'FeatureCollection',features});
 const feature=(geometry,properties={})=>({type:'Feature',geometry,properties});
 
-export function createFieldMap(container,initialSurvey,onSelect,onStatus=()=>{}){
+export function createFieldMap(container,initialSurvey,onSelect,onStatus=()=>{},onBasemapChange=()=>{}){
   const maplibregl=window.maplibregl;
   if(!maplibregl)throw new Error('MapLibre did not load');
-  let survey=initialSurvey,layer='all',selected=survey.findings[0]?.id,view='3d',time=0,ready=false;
+  let survey=initialSurvey,layer='all',selected=survey.findings[0]?.id,view='3d',time=0,ready=false,basemap='satellite';
   const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
   const map=new maplibregl.Map({
     container,style:'https://tiles.openfreemap.org/styles/liberty',
@@ -94,8 +94,27 @@ export function createFieldMap(container,initialSurvey,onSelect,onStatus=()=>{})
     const compact=container.clientWidth<1000||container.clientHeight<560;
     map.fitBounds(areaBounds(),{padding:compact?{top:110,bottom:130,left:25,right:25}:{top:125,bottom:160,left:290,right:335},duration:reduced?0:650,pitch:view==='3d'?52:0,bearing:view==='3d'?-12:0});
   }
+  function setBasemap(value){
+    if(!['map','satellite'].includes(value))return;
+    basemap=value;
+    if(ready){
+      // Keep the style and shared WebGL context alive; only the raster visibility changes.
+      map.setLayoutProperty('satellite-imagery','visibility',value==='satellite'?'visible':'none');
+      const lineColor=value==='satellite'?'#fefee3':'#2c6e49';
+      map.setPaintProperty('survey-extent-line','line-color',lineColor);
+      map.setPaintProperty('survey-route-line','line-color',lineColor);
+    }
+    onBasemapChange(value);onStatus(null);
+  }
   map.on('load',()=>{
     map.setProjection({type:'mercator'});
+    map.addSource('satellite-imagery',{
+      type:'raster',tileSize:256,maxzoom:19,
+      tiles:['https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+      attribution:'Imagery &copy; <a href="https://www.arcgis.com/home/item.html?id=10df2279f9684e4a9f6a7f08febac2a9" target="_blank" rel="noopener">Esri</a>, Vantor, Earthstar Geographics, and the GIS User Community',
+    });
+    // Added above the base style and below every survey layer, including Three.js.
+    map.addLayer({id:'satellite-imagery',type:'raster',source:'satellite-imagery',layout:{visibility:'none'},paint:{'raster-fade-duration':150}});
     const corners=[demoArea.topLeft,demoArea.topRight,demoArea.bottomRight,demoArea.bottomLeft,demoArea.topLeft].map(point=>[point.longitude,point.latitude]);
     map.addSource('survey-extent',{type:'geojson',data:feature({type:'Polygon',coordinates:[corners]})});
     map.addLayer({id:'survey-extent-line',type:'line',source:'survey-extent',paint:{'line-color':'#2c6e49','line-width':2,'line-dasharray':[4,3]}});
@@ -109,14 +128,24 @@ export function createFieldMap(container,initialSurvey,onSelect,onStatus=()=>{})
     map.addLayer({id:'finding-labels',type:'symbol',source:'findings',layout:{'text-field':['get','number'],'text-size':10,'text-allow-overlap':true},paint:{'text-color':'#153526','text-halo-color':'#fefee3','text-halo-width':1.3}});
     map.addSource('drone-position',{type:'geojson',data:collection([])});
     map.addLayer({id:'drone-point',type:'circle',source:'drone-position',paint:{'circle-radius':6,'circle-color':'#ffc9b9','circle-stroke-color':'#153526','circle-stroke-width':2}});
-    ready=true;updateData();fit();onStatus(null);
+    ready=true;updateData();fit();setBasemap(basemap);
     map.on('click','finding-points',event=>{const id=event.features?.[0]?.properties?.id;if(id)onSelect(id);});
     map.on('mouseenter','finding-points',()=>map.getCanvas().style.cursor='pointer');map.on('mouseleave','finding-points',()=>map.getCanvas().style.cursor='');
   });
-  map.on('error',()=>onStatus('Map source could not load. Check internet access and reload.'));
+  map.on('error',event=>{
+    if(event.sourceId==='satellite-imagery'){
+      if(basemap==='satellite'){
+        setBasemap('map');
+        onStatus('Satellite imagery could not load. Showing the map; check internet access before trying again.');
+      }
+      return;
+    }
+    onStatus('Map source could not load. Check internet access and reload.');
+  });
   map.on('webglcontextlost',()=>onStatus('The graphics context was lost. Reload to restore the map.'));
   const observer=new ResizeObserver(()=>map.resize());observer.observe(container);
   return {
+    setBasemap,
     setView(value){view=value;columns.visible=value==='3d';drone.visible=value==='3d';if(ready){map.setLayoutProperty('analysis-flat','visibility',value==='2d'?'visible':'none');}map.easeTo({pitch:value==='3d'?52:0,bearing:value==='3d'?-12:0,duration:reduced?0:500});map.triggerRepaint();},
     setLayer(value){layer=value;updateData();},setSelected(value){selected=value;if(ready)map.setPaintProperty('finding-points','circle-color',['case',['==',['get','id'],selected??''],'#fefee3','#2c6e49']);},
     setTime(value){time=value;updateTime();},setSurvey(value){survey=value;updateData();},

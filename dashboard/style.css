@@ -39,8 +39,14 @@ button,input,select{font:inherit}button{cursor:pointer;color:inherit;border:0;ba
 /* MapLibre owns the map canvas; floating modules retain the approved system. */
 #map{cursor:auto}
 #map .maplibregl-canvas{outline-offset:-3px}
-#map .maplibregl-control-container .maplibregl-ctrl-bottom-right{bottom:118px;right:24px;z-index:1}
+#map .maplibregl-control-container .maplibregl-ctrl-bottom-right{bottom:118px;right:260px;z-index:1}
 #map .maplibregl-ctrl-attrib{background:var(--cream);color:var(--ink);font-size:10px;border-radius:5px;max-width:250px}
 #map .maplibregl-ctrl-attrib a{color:var(--forest)}
 .map-notice{position:absolute;top:105px;left:50%;transform:translateX(-50%);z-index:5;padding:12px 16px;font-size:12px;max-width:min(440px,80vw);line-height:1.6}
-@media(max-width:700px){#map .maplibregl-control-container .maplibregl-ctrl-bottom-right{bottom:220px;right:12px}.map-notice{top:125px;max-width:calc(100vw - 32px)}}
+@media(max-width:700px){#map .maplibregl-control-container .maplibregl-ctrl-bottom-right{bottom:6px;right:12px}.map-notice{top:125px;max-width:calc(100vw - 32px)}}
+.basemap-switch{position:absolute;top:108px;left:50%;transform:translateX(-50%);z-index:3}
+.basemap-switch button{width:auto;min-width:64px;padding:0 13px}
+.map-notice{top:164px}
+@media(max-width:1000px){.basemap-switch{left:44%}}
+@media(max-width:700px){.basemap-switch{top:84px;left:auto;right:12px;transform:none}.basemap-switch button{min-width:50px;padding:0 10px;font-size:11px}.map-notice{top:135px}}
+@media(max-height:560px) and (min-width:701px){.basemap-switch{top:78px}.map-notice{top:130px}}

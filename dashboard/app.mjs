@@ -6,10 +6,10 @@ import { normaliseFeed, coordinatesFor, demoArea } from './geo.mjs';
 const $ = selector => document.querySelector(selector);
 const survey = structuredClone(sample);
 let selected = survey.findings[0]?.id, layer = 'all', elapsed = 0, playing = false, speed = 1, previousFrame = 0;
-let socket = null, toastTimer, demo = true;
+let socket = null, toastTimer, demo = true, basemap = 'satellite';
 const formatTime = value => `${String(Math.floor(value/60)).padStart(2,'0')}:${String(Math.floor(value%60)).padStart(2,'0')}`;
 const escape = value => String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
-const map = createFieldMap($('#map'),survey,selectFinding,message=>{const notice=$('#map-notice');notice.hidden=!message;notice.textContent=message??'';});
+const map = createFieldMap($('#map'),survey,selectFinding,message=>{const notice=$('#map-notice');notice.hidden=!message;notice.textContent=message??'';},updateBasemapUi);
 
 function renderFindings(){
   const findings=findingsForLayer(survey.findings,layer);
@@ -26,12 +26,21 @@ function renderFindings(){
   if(!findings.length)$('#finding-list').innerHTML='<div class="empty-state"><h3>No assessment available</h3><p>This layer has no supporting observations. Missing data does not mean the field is healthy.</p></div>';
   renderDetail();map.setLayer(layer);map.setSelected(selected);updateSourceLabels();
 }
+function updateBasemapUi(value){
+  basemap=value;
+  $('#basemap-switch').querySelectorAll('button').forEach(button=>{
+    const active=button.dataset.basemap===value;button.classList.toggle('active',active);button.setAttribute('aria-pressed',active);
+  });
+  updateSourceLabels();
+}
+$('#basemap-switch').onclick=event=>{const button=event.target.closest('[data-basemap]');if(button)map.setBasemap(button.dataset.basemap);};
 function updateSourceLabels(){
   const view=$('#view-2d').getAttribute('aria-pressed')==='true'?'2D':'3D';
   $('#map-mode-label').textContent=`${view} ${demo?'sample':'feed'} view`;
   $('#survey-context').textContent=`51.949961, −8.220098 · ${demo?'Sample survey':'Feed observations'}`;
   $('#legend-note').textContent=layer==='soil'?'No supported soil-property data':demo?'Illustrative intensity · not a measurement':'Feed locations · no measured intensity';
   $('.legend-scale').hidden=!demo;
+  $('#source-credit').textContent=`${basemap==='satellite'?'Satellite':'Map'} · ${demo?'sample observations':'unvalidated feed'} & simulated route`;
 }
 function renderDetail(){
   const finding=survey.findings.find(item=>item.id===selected);
@@ -94,7 +103,7 @@ $('#connection-form').onsubmit=event=>{
   if($('#source').value==='demo'){
     if(socket){socket.onclose=null;socket.close();socket=null;}
     survey.findings=structuredClone(sample.findings);survey.source=sample.source;survey.illustrative=true;demo=true;selected=survey.findings[0]?.id;playing=false;elapsed=0;map.setSurvey(survey);renderFindings();updateReplay();
-    $('#source-credit').textContent='Real map · sample observations & simulated route';connectionStatus('Using six hand-authored observations.','Demo source');showToast('Sample survey loaded');return;
+    connectionStatus('Using six hand-authored observations.','Demo source');showToast('Sample survey loaded');return;
   }
   let address;try{address=new URL($('#endpoint').value);if(!['ws:','wss:'].includes(address.protocol))throw new Error();if(location.protocol==='https:'&&address.protocol==='ws:')throw new Error();}catch{connectionStatus('Enter a valid ws:// or wss:// address. HTTPS pages require wss://.','Not connected','failed');return;}
   let current;
@@ -106,7 +115,7 @@ $('#connection-form').onsubmit=event=>{
   current.onmessage=event=>{
     if(socket!==current)return;
     try{const findings=normaliseFeed(JSON.parse(event.data));if(!findings.length){connectionStatus('Message received, but no usable geographic or sample-grid positions. Existing data retained.','Connected','connected');return;}
-      survey.findings=findings;survey.source='Connected WebSocket feed';survey.illustrative=false;demo=false;selected=findings[0].id;playing=false;map.setSurvey(survey);renderFindings();updateReplay();$('#source-credit').textContent='Real map · unvalidated feed & simulated route';connectionStatus(`Received ${findings.length} observations. Results remain unvalidated.`,'Connected','connected');
+      survey.findings=findings;survey.source='Connected WebSocket feed';survey.illustrative=false;demo=false;selected=findings[0].id;playing=false;map.setSurvey(survey);renderFindings();updateReplay();connectionStatus(`Received ${findings.length} observations. Results remain unvalidated.`,'Connected','connected');
     }catch{connectionStatus('Message could not be read as JSON. Existing observations retained.','Connected','connected');}
   };
   current.onerror=()=>{if(socket===current)connectionStatus('Connection failed. Check the address and that the phone or AI feed is running.','Connection failed','failed');};

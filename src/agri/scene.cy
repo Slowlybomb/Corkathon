@@ -82,7 +82,10 @@ pub fn main(e0m: u32, n0m: u32, npatch: u32) -> u32
     mut bp = md.bp
     mut bs = md.bs
     mut irish = false
-    ov = readfile(bytes("out/cork_soil_heads.bin"))
+    mut ov = readfile(bytes("out/cork_soil_heads.bin"))
+    if len(ov) == u32(0) then
+        ov = readfile(bytes("models/cork_soil_heads.bin"))
+    end
     if len(ov) == df * D.NSOIL * u32(4) then
         mut oa = u32(0)
         while oa < df do
@@ -94,7 +97,7 @@ pub fn main(e0m: u32, n0m: u32, npatch: u32) -> u32
             oa = oa + u32(1)
         end
         irish = true
-        TR.say(bytes("using the Irish-recalibrated soil heads (out/cork_soil_heads.bin)\n"))
+        TR.say(bytes("using the Irish-recalibrated soil heads (cork_soil_heads.bin)\n"))
     end
     mut bw = md.bw
     mut ymu = md.ymu
@@ -353,7 +356,7 @@ pub fn main(e0m: u32, n0m: u32, npatch: u32) -> u32
     n = n + PR.render(dv, npx, npx, u32(6), u32(10), f32(0.0), f32(1.0), od, bytes("cork_crop"))
     PR.zones(dv, npx, npx, u32(3), u32(41), bth, u32(0))
     n = n + PR.render_zones(dv, npx, npx, u32(41), od, bytes("cork_zones_ndvi"))
-    n = n + EX.package(bytes("out/cork/"), bytes("Cork, Ireland - Sentinel-2 L2A 2023-05-30, 10 m"), dv, npx, npx, x0, y0, 10.0, epsg, bytes("data/cork/dem/"), bytes("Soil layers: model with soil heads recalibrated on Irish SoilGrids (held-out R2 pH 0.18, organic carbon 0.20). Weather layers: observed ERA5-Land for the scene date via Open-Meteo, about 9 km, not model output. Crop classes are Bavarian (Munich480) classes and do not apply to Irish grassland. Boundary threshold: 85th percentile of the scene."))
+    n = n + EX.package(bytes("out/cork/"), bytes("Cork, Ireland - Sentinel-2 L2A 2023-05-30, 10 m"), dv, npx, npx, x0, y0, 10.0, epsg, bytes("data/cork/dem/"), bytes("Soil layers: model with soil heads recalibrated on Irish SoilGrids (held-out R2 pH 0.19, organic carbon 0.20). Weather layers: observed ERA5-Land for the scene date via Open-Meteo, about 9 km, not model output. Crop classes are Bavarian (Munich480) classes and do not apply to Irish grassland. Boundary threshold: 85th percentile of the scene."))
     vr = validate(dv, npx, x0, y0, epsg % u32(100), bytes("data/cork/soil/"))
     TR.say(vr)
     n = n + writefile("out/cork/validation.txt", vr)

@@ -18,7 +18,7 @@ This is a product and hackathon delivery plan, not a technical specification. Co
 | Intended phone role | Camera and computing unit for analysing observations during a future survey |
 | Product ambition | Show drone position and analyse soil/vegetation coverage, unusual patches, possible wet areas, and soil properties |
 | Hackathon flight | No flight. Demonstrate the physical construction |
-| Current stage | Agree on the product, scope, and story; discuss technical implementation later |
+| Current stage | Dashboard prototype underway; AI analysis and dataset selection proceed with the Claude teammate |
 
 The phone's attachment, payload suitability, and ability to perform the intended processing remain unverified. The static construction does not establish flight readiness.
 
@@ -80,7 +80,7 @@ For the demonstration, replaying a survey also moves a position marker and revea
 
 ## 6. Proposed dashboard
 
-The panel should answer the farmer's immediate questions before displaying detailed data.
+The panel should answer the farmer's immediate questions before displaying detailed data. The user has since fixed the visual form: a fullscreen map with floating modules, no page scrolling, and 2D/3D views. [DESIGN.md](../DESIGN.md) is the visual authority.
 
 | Area | Contents and purpose |
 | --- | --- |

@@ -20,7 +20,7 @@ export function createFieldMap(container,initialSurvey,onSelect,onStatus=()=>{},
     maxPitch:70,attributionControl:false,canvasContextAttributes:{antialias:true},
   });
   map.addControl(new maplibregl.AttributionControl({compact:true}),'bottom-right');
-  map.getCanvas().setAttribute('aria-label','Cork survey map. Drag to pan, right-drag to rotate. Findings are available in the observations list.');
+  map.getCanvas().setAttribute('aria-label','Geographic field map. Drag to pan, right-drag to rotate. Findings are available in the observations list.');
   const origin=maplibregl.MercatorCoordinate.fromLngLat([demoArea.center.longitude,demoArea.center.latitude],0);
   const meter=origin.meterInMercatorCoordinateUnits();
   function local(point,altitude=0){
@@ -73,18 +73,18 @@ export function createFieldMap(container,initialSurvey,onSelect,onStatus=()=>{},
     updateTelemetryPosition();
   }
   function updateTelemetryPosition(){
-      const current=telemetryAt(liveTelemetry),point=current.location;
-      const plottable=point&&Math.abs(point.latitude)<=85;
-      if(ready)map.getSource('drone-position').setData(collection(plottable?[feature({type:'Point',coordinates:[point.longitude,point.latitude]},{source:'phone-gps',accuracyM:point.accuracyM})]:[]));
-      const attitude=droneQuaternion(current.orientation);
-      // GPS without attitude remains a point; no fabricated yaw, tilt, altitude, or rotor motion.
-      drone.visible=Boolean(plottable&&attitude)&&view==='3d';
-      if(plottable){
-        ensureDroneModel();drone.position.copy(local(point,point.altitudeM??0));
-        if(attitude)drone.quaternion.fromArray(attitude);
-        if(ready&&!located){located=true;locateDrone();}
-      }
-      mixer?.setTime(0);map.triggerRepaint();
+    const current=telemetryAt(liveTelemetry),point=current.location;
+    const plottable=point&&Math.abs(point.latitude)<=85;
+    if(ready)map.getSource('drone-position').setData(collection(plottable?[feature({type:'Point',coordinates:[point.longitude,point.latitude]},{source:'phone-gps',accuracyM:point.accuracyM})]:[]));
+    const attitude=droneQuaternion(current.orientation);
+    // GPS without attitude remains a point; no fabricated yaw, tilt, altitude, or rotor motion.
+    drone.visible=Boolean(plottable&&attitude)&&view==='3d';
+    if(plottable){
+      ensureDroneModel();drone.position.copy(local(point,point.altitudeM??0));
+      if(attitude)drone.quaternion.fromArray(attitude);
+      if(ready&&!located){located=true;locateDrone();}
+    }
+    mixer?.setTime(0);map.triggerRepaint();
   }
   function fit(){
     const bounds=surveyBounds(survey);

@@ -1,4 +1,4 @@
-// Camera-module telemetry is separate from the illustrative survey route.
+// Camera-module telemetry uses only fresh phone GPS and orientation readings.
 const finite=value=>typeof value==='number'&&Number.isFinite(value);
 const age=(value,limit)=>finite(value)&&value>=0&&value<=limit;
 const optional=value=>finite(value)?value:null;

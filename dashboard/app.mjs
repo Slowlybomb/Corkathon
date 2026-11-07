@@ -16,6 +16,7 @@ const dronePanel=createDroneTelemetry($('#drone-telemetry'));
 
 function renderLayerFilters(){
   const layers=['all',...new Set(survey.findings.map(item=>item.layer??'observations').filter(name=>name!=='all'))];
+  const focusedLayer=$('#layers').contains(document.activeElement)?document.activeElement.dataset.layer:null;
   if(!layers.includes(layer))layer='all';
   $('#layers').replaceChildren(...layers.map(name=>{
     const button=document.createElement('button'),swatch=document.createElement('span');
@@ -25,6 +26,7 @@ function renderLayerFilters(){
     if(name===layer){const check=document.createElement('span');check.className='layer-check';check.textContent='✓';button.append(check);}
     return button;
   }));
+  if(focusedLayer)[...$('#layers').children].find(button=>button.dataset.layer===focusedLayer)?.focus({preventScroll:true});
 }
 function renderFindings(){
   renderLayerFilters();

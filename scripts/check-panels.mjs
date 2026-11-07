@@ -53,7 +53,7 @@ try{
   const near=(actual,expected,label)=>assert.ok(Math.abs(actual-expected)<2,`${label}: ${actual} vs ${expected}`);
   const key=async selector=>{
     await evaluate(`document.querySelector(${JSON.stringify(selector)}).focus()`);
-    return async (name,shift=false)=>{await c('Input.dispatchKeyEvent',{type:'keyDown',key:name,code:name,modifiers:shift?8:0});await c('Input.dispatchKeyEvent',{type:'keyUp',key:name,code:name});};
+    return async (name,shift=false)=>{const activation=name==='Enter'?{windowsVirtualKeyCode:13,text:'\r'}:name==='Tab'?{windowsVirtualKeyCode:9}:{};await c('Input.dispatchKeyEvent',{type:'keyDown',key:name,code:name,modifiers:shift?8:0,...activation});await c('Input.dispatchKeyEvent',{type:'keyUp',key:name,code:name});};
   };
   const drag=async(selector,dx,dy,touch=false)=>{
     const handle=await box(selector),x=handle.x+handle.width/2,y=handle.y+handle.height/2;
@@ -133,6 +133,11 @@ try{
   await evaluate(`window.previousFeed.onmessage({data:JSON.stringify({observations:[{latitude:52,longitude:-9,layer:'lab_ph',value:5,metric:'pH'},{latitude:51,longitude:-8,layer:'field_notes',label:'Inspect source image'}]})})`);
   assert.equal(await evaluate(`document.querySelector('[data-layer="lab_ph"]').textContent.trim()`),'lab ph','Layer choices come from received data');
   assert.equal(await evaluate(`!!document.querySelector('[data-layer="anomalies"]')`),false,'No placeholder assessment categories are offered');
+  press=await key('[data-layer="lab_ph"]');await press('Enter');
+  assert.equal(await evaluate(`document.activeElement.dataset.layer`),'lab_ph','Selecting a layer keeps keyboard focus on that control');
+  assert.equal(await evaluate(`document.querySelector('#finding-count').textContent`),'1');
+  await press('Tab');await press('Enter');
+  assert.equal(await evaluate(`document.activeElement.dataset.layer`),'field_notes','Keyboard users can select another received layer');
   await evaluate(`window.fixtureFitBounds=window.fixtureMap.fitBounds;window.fixtureMap.fitBounds=function(bounds,options){window.lastDataBounds=bounds;return window.fixtureFitBounds.call(this,bounds,options);}`);
   await click('#fit');
   assert.deepEqual(await evaluate(`window.lastDataBounds`),[[-9,51],[-8,52]],'Fit uses the geographic extent of received observations');

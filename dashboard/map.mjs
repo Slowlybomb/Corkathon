@@ -13,7 +13,7 @@ export function createFieldMap(container,initialSurvey,onSelect,onStatus=()=>{},
   const maplibregl=window.maplibregl;
   if(!maplibregl)throw new Error('MapLibre did not load');
   let survey=initialSurvey,layer='all',selected=survey.findings[0]?.id,view='3d',ready=false,basemap='satellite';
-  let liveTelemetry=null,located=false,follow=false,flight=null,followFrame=0,lastFrame=0;
+  let liveTelemetry=null,located=false,cameraMode='free',flight=null,followFrame=0,lastFrame=0;
   const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
   const map=new maplibregl.Map({
     container,style:'https://tiles.openfreemap.org/styles/liberty',
@@ -32,10 +32,31 @@ export function createFieldMap(container,initialSurvey,onSelect,onStatus=()=>{},
   scene.add(new THREE.AmbientLight(0xffffff,2));
   const light=new THREE.DirectionalLight(0xfff7dc,2.5);light.position.set(-1500,-2500,4500);scene.add(light);
   const drone=new THREE.Group();drone.name='survey-drone';scene.add(drone);
+  const surface=new THREE.Group();surface.name='model-surface';scene.add(surface);
+  const frustumLines=new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position',new THREE.BufferAttribute(new Float32Array(48),3)),new THREE.LineBasicMaterial({color:0xfefee3,transparent:true,opacity:.9}));
+  const footprintGeometry=new THREE.BufferGeometry().setAttribute('position',new THREE.BufferAttribute(new Float32Array(18),3));
+  const footprint=new THREE.Mesh(footprintGeometry,new THREE.MeshBasicMaterial({color:0xffc9b9,transparent:true,opacity:.28,side:THREE.DoubleSide,depthWrite:false}));
+  frustumLines.frustumCulled=false;footprint.frustumCulled=false;frustumLines.visible=false;footprint.visible=false;scene.add(frustumLines,footprint);
+  function updateFrustum(apex){
+    const h=(flight.heading??0)*Math.PI/180,look=Math.max(0,Math.min(60,30+flight.pitch))*Math.PI/180,half=[35*Math.PI/180,24*Math.PI/180];
+    const f=[Math.sin(h),Math.cos(h),0],r=[Math.cos(h),-Math.sin(h),0];
+    const c=[Math.sin(look)*f[0],Math.sin(look)*f[1],-Math.cos(look)],u=[Math.cos(look)*f[0],Math.cos(look)*f[1],Math.sin(look)];
+    const corners=[[-1,1],[1,1],[1,-1],[-1,-1]].map(([sx,sy])=>{
+      const ray=[0,1,2].map(k=>c[k]+sx*Math.tan(half[0])*r[k]+sy*Math.tan(half[1])*u[k]);
+      const t=apex.z/Math.max(.05,-ray[2]);
+      return [apex.x+ray[0]*t,apex.y+ray[1]*t,1.5];
+    });
+    const line=frustumLines.geometry.attributes.position,a=[apex.x,apex.y,apex.z];
+    corners.forEach((p,i)=>{line.set([...a,...p],i*6);line.set([...p,...corners[(i+1)%4]],24+i*6);});
+    line.needsUpdate=true;
+    footprintGeometry.attributes.position.set([...corners[0],...corners[1],...corners[2],...corners[0],...corners[2],...corners[3]]);
+    footprintGeometry.attributes.position.needsUpdate=true;
+    frustumLines.visible=cameraMode!=='fpv'&&view==='3d';footprint.visible=true;
+  }
   let renderer,mixer,droneAsset,modelGeneration=0,modelRequested=false,analysis,analysisError=null;
   let analysisOptions={};
   function ensureDroneModel(){
-    if(!renderer||(!follow&&!telemetryAt(liveTelemetry).location)||modelRequested)return;
+    if(!renderer||(!flight&&!telemetryAt(liveTelemetry).location)||modelRequested)return;
     modelRequested=true;
     const generation=++modelGeneration;
     loadDroneModel().then(asset=>{
@@ -56,7 +77,7 @@ export function createFieldMap(container,initialSurvey,onSelect,onStatus=()=>{},
     },
     render(_gl,args){
       // Local meshes use Mercator. Native map layers wrap around the globe at wider scales.
-      if(view!=='3d'||args.defaultProjectionData.projectionTransition>0)return;
+      if(args.defaultProjectionData.projectionTransition>0)return;
       const projection=new THREE.Matrix4().fromArray(args.defaultProjectionData.mainMatrix);
       const model=new THREE.Matrix4().makeTranslation(origin.x,origin.y,origin.z).scale(new THREE.Vector3(meter,-meter,meter));
       camera.projectionMatrix.copy(projection).multiply(model);
@@ -77,7 +98,7 @@ export function createFieldMap(container,initialSurvey,onSelect,onStatus=()=>{},
     const current=telemetryAt(liveTelemetry),point=current.location;
     const plottable=point&&Math.abs(point.latitude)<=85;
     if(ready)map.getSource('drone-position').setData(collection(plottable?[feature({type:'Point',coordinates:[point.longitude,point.latitude]},{source:'phone-gps',accuracyM:point.accuracyM})]:[]));
-    if(follow){map.triggerRepaint();return;}
+    if(flight){map.triggerRepaint();return;}
     const attitude=droneQuaternion(current.orientation);
     // GPS without attitude remains a point; no fabricated yaw, tilt, altitude, or rotor motion.
     drone.visible=Boolean(plottable&&attitude)&&view==='3d';
@@ -89,20 +110,54 @@ export function createFieldMap(container,initialSurvey,onSelect,onStatus=()=>{},
     mixer?.setTime(0);map.triggerRepaint();
   }
   function stepFollow(now){
-    if(!follow||!flight)return;
+    if(!flight)return;
     const dt=Math.min(.1,Math.max(0,(now-lastFrame)/1000));lastFrame=now;
-    const camera=stepFlight(flight,telemetryAt(liveTelemetry),dt);
+    const chase=stepFlight(flight,telemetryAt(liveTelemetry),dt);
     drone.position.copy(local(flight,120));
     const pose=droneQuaternion({headingDeg:flight.heading??0,pitchDeg:flight.pitch,rollDeg:flight.roll});if(pose)drone.quaternion.fromArray(pose);
-    drone.visible=view==='3d';ensureDroneModel();
-    map.jumpTo(camera);
+    drone.visible=view==='3d'&&cameraMode!=='fpv';ensureDroneModel();updateFrustum(drone.position);
+    if(cameraMode==='follow')map.jumpTo(chase);
+    else if(cameraMode==='overview')map.jumpTo({center:[flight.longitude,flight.latitude],zoom:14.3,pitch:55,bearing:-20,roll:0});
+    else if(cameraMode==='fpv')map.jumpTo(map.calculateCameraOptionsFromCameraLngLatAltRotation([flight.longitude,flight.latitude],120,flight.heading??0,Math.max(0,Math.min(85,65-flight.pitch)),flight.roll));
+    else map.triggerRepaint();
     followFrame=requestAnimationFrame(stepFollow);
   }
-  function setFollow(on){
-    if(on===follow)return;
-    follow=on;cancelAnimationFrame(followFrame);
-    if(on){flight=createFlight(demoArea);lastFrame=performance.now();followFrame=requestAnimationFrame(stepFollow);}
-    else{flight=null;if(ready)map.easeTo({roll:0,duration:reduced?0:300});updateTelemetryPosition();}
+  function startFlight(){if(flight)return;flight=createFlight(demoArea);lastFrame=performance.now();followFrame=requestAnimationFrame(stepFollow);}
+  function stopFlight(){cancelAnimationFrame(followFrame);flight=null;frustumLines.visible=false;footprint.visible=false;updateTelemetryPosition();}
+  function setCameraMode(mode){
+    cameraMode=mode;
+    if(mode!=='free')startFlight();
+    map.setMaxPitch(mode==='fpv'?85:70);
+    if(mode==='free'&&ready)map.easeTo({roll:0,pitch:Math.min(map.getPitch(),70),duration:reduced?0:300});
+    if(mode==='free'&&!liveTelemetry)stopFlight();
+  }
+  function setHeatmap({url,coordinates,opacity}){
+    if(!ready)return;
+    const source=map.getSource('phone-heatmap');
+    if(source)source.updateImage({url,coordinates});
+    else{map.addSource('phone-heatmap',{type:'image',url,coordinates});map.addLayer({id:'phone-heatmap',type:'raster',source:'phone-heatmap',paint:{'raster-opacity':opacity,'raster-resampling':'linear','raster-fade-duration':0}},'drone-3d');}
+    map.setPaintProperty('phone-heatmap','raster-opacity',opacity);
+  }
+  function clearSurface(){for(const mesh of surface.children){mesh.geometry.dispose();mesh.material.dispose();}surface.clear();}
+  function setSurface({values,grid,low,high,corners,height,color}){
+    clearSurface();
+    const n=grid,geometry=new THREE.PlaneGeometry(1,1,n-1,n-1),position=geometry.attributes.position,colors=new Float32Array(n*n*3);
+    const [tl,tr,br,bl]=corners,span=high>low?high-low:1;
+    for(let r=0;r<n;r++)for(let c=0;c<n;c++){
+      const u=(c+.5)/n,v=(r+.5)/n,value=values[r*n+c],t=Number.isFinite(value)?Math.max(0,Math.min(1,(value-low)/span)):0;
+      const longitude=tl[0]*(1-u)*(1-v)+tr[0]*u*(1-v)+br[0]*u*v+bl[0]*(1-u)*v,latitude=tl[1]*(1-u)*(1-v)+tr[1]*u*(1-v)+br[1]*u*v+bl[1]*(1-u)*v;
+      const p=local({longitude,latitude},6+t*height),i=r*n+c,[red,green,blue]=color(t);
+      position.setXYZ(i,p.x,p.y,p.z);colors[i*3]=red/255;colors[i*3+1]=green/255;colors[i*3+2]=blue/255;
+    }
+    geometry.setAttribute('color',new THREE.BufferAttribute(colors,3));geometry.computeVertexNormals();
+    surface.add(new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({vertexColors:true,roughness:.85,metalness:0,side:THREE.DoubleSide,transparent:true,opacity:.78,depthWrite:false})));
+    map.triggerRepaint();
+  }
+  function setHeatmapOpacity(opacity){if(ready&&map.getLayer('phone-heatmap'))map.setPaintProperty('phone-heatmap','raster-opacity',opacity);}
+  function fitArea(){
+    const c=[demoArea.topLeft,demoArea.topRight,demoArea.bottomLeft,demoArea.bottomRight];
+    map.fitBounds([[Math.min(...c.map(p=>p.longitude)),Math.min(...c.map(p=>p.latitude))],[Math.max(...c.map(p=>p.longitude)),Math.max(...c.map(p=>p.latitude))]],{padding:{top:130,bottom:170,left:330,right:330},minZoom:12.4,maxZoom:14.5,pitch:view==='3d'?55:0,duration:reduced?0:650});
+    map.once('moveend',()=>{if(map.getZoom()<12.4)map.easeTo({zoom:12.6,duration:reduced?0:300});});
   }
   function fit(){
     const bounds=surveyBounds(survey);
@@ -154,6 +209,7 @@ export function createFieldMap(container,initialSurvey,onSelect,onStatus=()=>{},
     map.on('mouseenter','finding-points',()=>map.getCanvas().style.cursor='pointer');map.on('mouseleave','finding-points',()=>map.getCanvas().style.cursor='');
   });
   map.on('error',event=>{
+    if(event.sourceId==='phone-heatmap'||event.error?.name==='AbortError')return;
     if(event.sourceId==='satellite-imagery'){
       if(basemap==='satellite'){
         setBasemap('map');
@@ -172,8 +228,8 @@ export function createFieldMap(container,initialSurvey,onSelect,onStatus=()=>{},
     setView(value){view=value;analysis?.setView(value);if(ready){map.setProjection({type:value==='3d'?'globe':'mercator'});}map.easeTo({pitch:value==='3d'?52:0,bearing:value==='3d'?-12:0,duration:reduced?0:500});updateTelemetryPosition();},
     setLayer(value){layer=value;updateData();},setSelected(value){selected=value;if(ready)map.setPaintProperty('finding-points','circle-color',['case',['==',['get','id'],selected??''],'#fefee3','#2c6e49']);},
     setSurvey(value){survey=value;updateData();},
-    setTelemetry(value){liveTelemetry=value;if(!value)located=false;updateTelemetryPosition();},
-    locateDrone,setFollow,followMode(){return flight?.mode??null;},
+    setTelemetry(value){liveTelemetry=value;if(!value)located=false;if(value)startFlight();else if(cameraMode==='free')stopFlight();updateTelemetryPosition();},
+    locateDrone,setCameraMode,followMode(){return flight?.mode??null;},setHeatmap,setHeatmapOpacity,fitArea,setSurface,clearSurface,getMap(){return map;},
     zoomBy(factor){map.easeTo({zoom:map.getZoom()+Math.log2(factor),duration:reduced?0:200});},fit,
   };
 }

@@ -42,6 +42,8 @@ public final class MainActivity extends Activity {
     private Button start, stop, test;
     private boolean running, subscribed, authenticated, sending, visible, autoRequested;
     private volatile boolean surveyRunning;
+    private final java.util.ArrayDeque<JSONObject> resultQueue=new java.util.ArrayDeque<>();
+    private int advertiseRetries;
     private volatile String surveyState = "starting";
     private int offset, inFlight, chunkSize = 20, session;
     private String pin = "", captureId;
@@ -64,6 +66,7 @@ public final class MainActivity extends Activity {
         text(root,"Camera module · stationary capture",14,MUTED);
         status=text(root,"Bluetooth stopped",18,CREAM);
         code=text(root,"Start Bluetooth to get a connection code",15,MUTED);
+        button(root,"Connect to website",this::connectWebsite);
         LinearLayout controls=new LinearLayout(this);root.addView(controls);
         start=button(controls,"Start Bluetooth",this::startBluetooth);
         stop=button(controls,"Stop",this::stopBluetooth);stop.setEnabled(false);
@@ -136,10 +139,10 @@ public final class MainActivity extends Activity {
     }
     private final AdvertiseCallback advertising=new AdvertiseCallback(){
         @Override public void onStartSuccess(AdvertiseSettings settings){main.post(()->{if(running){status.setText("Waiting for ground station");log("BLE service visible. Enter the camera module's code in the dashboard.");}});}
-        @Override public void onStartFailure(int error){main.post(()->{log("BLE advertising failed: "+error);stopBluetooth();});}
+        @Override public void onStartFailure(int error){main.post(()->{if(running&&advertiseRetries++<3){log("BLE advertising failed ("+error+"); retrying");main.postDelayed(MainActivity.this::advertise,900);}else{log("BLE advertising failed: "+error);stopBluetooth();}});}
     };
     private void clearPeer(){
-        session++;authenticated=false;subscribed=false;peer=null;incoming.reset();outgoing.clear();imageTransfer=null;offset=0;sending=false;test.setEnabled(false);cancelCapture("Link closed");
+        session++;resultQueue.clear();authenticated=false;subscribed=false;peer=null;incoming.reset();outgoing.clear();imageTransfer=null;offset=0;sending=false;test.setEnabled(false);cancelCapture("Link closed");
     }
     private void stopBluetooth(){
         running=false;
@@ -186,7 +189,7 @@ public final class MainActivity extends Activity {
             if(result!=BluetoothGatt.GATT_SUCCESS){log("Bluetooth transfer failed; reconnect the dashboard");server.cancelConnection(device);return;}
             offset+=inFlight;int delay=limited.isChecked()?inFlight*8:0;
             if(!outgoing.isEmpty()&&offset>=outgoing.peek().length){if(outgoing.remove()==imageTransfer)imageTransfer=null;offset=0;}
-            int current=session;main.postDelayed(()->{if(current==session){sending=false;flush();}},delay);
+            int current=session;main.postDelayed(()->{if(current==session){sending=false;feedResults();flush();}},delay);
         });}
     };
     private void send(JSONObject packet){
@@ -224,16 +227,18 @@ public final class MainActivity extends Activity {
                     camera.capture(jpeg->{String completed=captureId;captureId=null;updateCamera();log("Captured "+jpeg.length+" bytes; camera off; sending image");send(packet("image","id",completed,"capturedAt",System.currentTimeMillis(),"location",telemetry.snapshot().opt("location"),"mime","image/jpeg","base64",Base64.encodeToString(jpeg,Base64.NO_WRAP)));sendStatus();},message->{captureId=null;updateCamera();log(message);send(packet("error","id",id,"message",message));sendStatus();});
                     updateCamera();break;
                 case "stop_camera":cancelCapture("Stopped from dashboard");sendStatus();break;
-                case "results":sendResults(id,null);break;
-                case "results_layer":sendResults(id,value.optString("layer"));break;
+                case "results":sendResults(id,null,0);break;
+                case "results_layer":sendResults(id,value.optString("layer"),value.optInt("grid",192));break;
                 default:send(packet("error","id",id,"message","Unsupported command"));
             }
         }catch(Exception exception){log("Rejected command: "+exception.getMessage());send(packet("error","message","Invalid command packet"));}
     }
-    private void sendResults(String id,String layer){
+    private void feedResults(){while(!resultQueue.isEmpty()&&outgoing.size()<4&&authenticated)send(resultQueue.poll());}
+    private void connectWebsite(){advertiseRetries=0;if(!running)startBluetooth();if(!shareSensors.isChecked())shareSensors.setChecked(true);}
+    private void sendResults(String id,String layer,int grid){
         ResultServer.Survey survey=ResultServer.latest;
         if(survey==null){send(packet("error","id",id,"message",surveyRunning?"The phone is still computing the survey ("+surveyState+"). Try again shortly.":"No model results yet. Run Survey Cork area in the model screen first."));return;}
-        try{send(layer==null?ResultServer.header(survey,id):ResultServer.layerPacket(survey,id,layer));log(layer==null?"Sent model result list":"Sent model layer "+layer);}
+        try{if(layer==null)send(ResultServer.header(survey,id));else{resultQueue.addAll(ResultServer.layerPackets(survey,id,layer,grid));feedResults();}log(layer==null?"Sent model result list":"Sent model layer "+layer);}
         catch(Exception exception){send(packet("error","id",id,"message","Model results unavailable: "+exception.getMessage()));}
     }
     private String modelState(){return ResultServer.latest==null?surveyRunning?"computing":"on_device":"results_ready";}

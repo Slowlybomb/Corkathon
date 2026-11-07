@@ -165,21 +165,39 @@ final class ResultServer {
                 .put("stride", step).put("grid", (s.width + step - 1) / step).put("encoding", "f32le+deflate+base64");
     }
 
-    static JSONObject layerPacket(Survey s, String id, String name) throws Exception {
+    static List<JSONObject> layerPackets(Survey s, String id, String name, int grid) throws Exception {
         Layer l = s.layer(name);
         if (l == null) {
             throw new IllegalArgumentException("unknown layer " + name);
         }
-        int step = stride(s.width, s.width);
-        int grid = (s.width + step - 1) / step;
-        ByteBuffer b = ByteBuffer.allocate(grid * grid * 4).order(ByteOrder.LITTLE_ENDIAN);
+        int w = s.width;
+        if (grid <= 0 || grid > w || w % grid != 0) {
+            grid = w % 192 == 0 ? 192 : w;
+        }
+        int block = w / grid;
+        float[] v = new float[grid * grid];
+        float min = Float.POSITIVE_INFINITY, max = Float.NEGATIVE_INFINITY;
         for (int r = 0; r < grid; r++) {
             for (int c = 0; c < grid; c++) {
-                b.putFloat(l.data[(r * step) * s.width + c * step]);
+                double sum = 0;
+                for (int y = 0; y < block; y++) {
+                    for (int x = 0; x < block; x++) {
+                        sum += l.data[(r * block + y) * w + c * block + x];
+                    }
+                }
+                float a = (float) (sum / (block * block));
+                v[r * grid + c] = a;
+                min = Math.min(min, a);
+                max = Math.max(max, a);
             }
         }
+        byte[] q = new byte[v.length];
+        float scale = max > min ? 254f / (max - min) : 0f;
+        for (int i = 0; i < v.length; i++) {
+            q[i] = (byte) Math.round((v[i] - min) * scale);
+        }
         java.util.zip.Deflater d = new java.util.zip.Deflater(9);
-        d.setInput(b.array());
+        d.setInput(q);
         d.finish();
         ByteArrayOutputStream z = new ByteArrayOutputStream();
         byte[] buf = new byte[8192];
@@ -187,9 +205,15 @@ final class ResultServer {
             z.write(buf, 0, d.deflate(buf));
         }
         d.end();
-        return new JSONObject().put("v", 1).put("type", "results_layer").put("id", id).put("sentAt", System.currentTimeMillis())
-                .put("name", name).put("grid", grid).put("stride", step)
-                .put("data", android.util.Base64.encodeToString(z.toByteArray(), android.util.Base64.NO_WRAP));
+        String data = android.util.Base64.encodeToString(z.toByteArray(), android.util.Base64.NO_WRAP);
+        int size = 45000, parts = Math.max(1, (data.length() + size - 1) / size);
+        List<JSONObject> out = new ArrayList<>();
+        for (int i = 0; i < parts; i++) {
+            out.add(new JSONObject().put("v", 1).put("type", "results_layer").put("id", id).put("sentAt", System.currentTimeMillis())
+                    .put("name", name).put("grid", grid).put("min", min).put("max", max).put("encoding", "u8+deflate+base64")
+                    .put("part", i).put("parts", parts).put("data", data.substring(i * size, Math.min(data.length(), (i + 1) * size))));
+        }
+        return out;
     }
 
     void start() throws IOException {

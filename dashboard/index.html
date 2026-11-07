@@ -21,6 +21,8 @@
   </defs></svg>
   <main class="field-workspace" aria-label="Field survey workspace">
     <div id="map" aria-label="Geographic field map"></div>
+    <div id="map-compare" hidden aria-label="Comparison map"></div>
+    <div id="compare-labels" hidden><span id="compare-left" class="compare-label floating-surface"></span><span id="compare-right" class="compare-label floating-surface"></span></div>
     <p id="map-notice" class="map-notice floating-surface" role="status">Loading geographic map…</p>
     <header class="toolbar floating-surface">
       <a href="./" class="brand" aria-label="Ithir home"><svg class="icon"><use href="#i-field"/></svg><span>Ithir</span></a>
@@ -80,6 +82,24 @@
         <div class="legend" hidden><div class="legend-scale"></div><div class="legend-labels"><span id="analysis-min">—</span><span id="analysis-unit">No data</span><span id="analysis-max">—</span></div><p id="legend-note">Awaiting numeric model data.</p><div class="analysis-footer"><span id="analysis-count">0 cells</span><div class="cell-navigation" role="group" aria-label="Inspect analysis cells"><button id="cell-previous" class="icon-button" aria-label="Inspect previous cell">‹</button><button id="cell-next" class="icon-button" aria-label="Inspect next cell">›</button></div></div><p id="cell-readout" role="status">Hover, tap, or use arrows to inspect cells.</p></div>
       </div>
     </section>
+    <section id="model-panel" class="floating-surface model-panel" hidden aria-labelledby="model-title">
+      <div class="panel-heading"><h2 id="model-title">Drone model</h2></div>
+      <div class="model-content">
+        <p id="model-status" role="status">Waiting for the phone.</p>
+        <label for="model-layer">Layer</label><select id="model-layer"></select>
+        <label for="model-quality">Detail</label><select id="model-quality"><option value="96">Fast · 60 m cells</option><option value="192">Detailed · 30 m cells</option><option value="576" selected>Full · 10 m cells</option></select>
+        <label for="model-style">Style</label><select id="model-style"><option value="heatmap" selected>Heatmap on fields</option><option value="zones">Management zones</option><option value="relief">3D relief</option></select>
+        <div id="model-relief" hidden><label for="model-height">Relief height <output id="model-height-output">350 m</output></label><input id="model-height" type="range" min="0" max="800" step="25" value="350"></div>
+        <label for="model-compare">Compare side by side with</label><select id="model-compare"><option value="">Off</option></select>
+        <div id="model-legend" class="legend-scale"></div><div class="legend-labels"><span id="model-min">—</span><span id="model-unit"></span><span id="model-max">—</span></div>
+        <dl class="model-stats"><div><dt>Mean</dt><dd id="model-mean">—</dd></div><div><dt>Low (2%)</dt><dd id="model-low">—</dd></div><div><dt>High (98%)</dt><dd id="model-high">—</dd></div></dl>
+        <h3 class="model-chart-title">Data views · click to show</h3><div id="model-thumbs" class="model-thumbs"></div>
+        <h3 class="model-chart-title">Distribution across the scene</h3><svg id="model-histogram" class="model-chart" viewBox="0 0 240 70" role="img" aria-label="Histogram of layer values"></svg>
+        <div id="model-profile-wrap" hidden><h3 class="model-chart-title">Soil profile · scene average by depth</h3><svg id="model-profile" class="model-chart" viewBox="0 0 240 120" role="img" aria-label="Average value by soil depth"></svg></div>
+        <p id="model-note" class="phone-note"></p>
+        <div class="model-actions"><button id="model-fit" class="button" type="button">Fit area</button></div>
+      </div>
+    </section>
     <section class="floating-surface observations-panel" data-resize="sw" aria-labelledby="observations-title">
       <div class="panel-heading"><h2 id="observations-title">Observations <span class="count" id="finding-count">0</span></h2><button id="export" class="icon-button" aria-label="Export findings" title="Export findings" disabled><svg class="icon"><use href="#i-download"/></svg></button><button id="observations-toggle" class="icon-button" aria-expanded="true" aria-controls="observations-content" aria-label="Collapse observations"><svg class="icon"><use href="#i-chevron"/></svg></button></div>
       <div id="observations-content"><figure id="camera-evidence" class="camera-evidence" hidden><h3>Latest camera capture</h3><img id="camera-evidence-image" alt="Latest stationary camera module capture"><figcaption id="camera-evidence-caption"></figcaption><p>Camera still · no automated analysis. Separate from satellite estimates.</p></figure><div id="finding-list" class="finding-list" aria-label="Survey findings"></div><div id="finding-detail" class="finding-detail" aria-live="polite"></div></div>
@@ -95,6 +115,8 @@
       <div class="telemetry-position"><span>Phone GPS</span><strong id="drone-position-reading">Waiting for phone GPS</strong><small id="drone-gps-quality">No geographic position displayed</small></div>
       <button id="drone-locate" class="icon-button" aria-label="Locate drone on map" title="Locate drone on map" disabled><svg class="icon"><use href="#i-target"/></svg></button>
       <button id="drone-follow" class="button" type="button" aria-pressed="false">Follow drone</button>
+      <button id="drone-view" class="button" type="button" aria-pressed="false">Overview</button>
+      <button id="drone-fpv" class="button" type="button" aria-pressed="false">Be the drone</button>
       <p id="drone-follow-note" class="phone-note" hidden>Follow view: the phone's live orientation turns the drone and camera; tilting the phone flies it over the survey area. Position and movement are simulated.</p>
     </section>
     <footer class="map-credit"><span id="source-credit">No survey loaded</span></footer>

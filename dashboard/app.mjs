@@ -4,6 +4,7 @@ import { normaliseFeed, coordinatesFor } from './geo.mjs';
 import { loadScene, loadSceneLayer } from './scene.mjs';
 import { createDroneTelemetry } from './drone-telemetry.mjs';
 import { flightModeText } from './flight.mjs';
+import { createModelPanel } from './model-panel.mjs';
 
 const $ = selector => document.querySelector(selector);
 const survey = {name:'Field workspace',source:null,findings:[]};
@@ -14,6 +15,7 @@ let droneTelemetry=null,phoneConnected=false;
 const escape = value => String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const map = createFieldMap($('#map'),survey,selectFinding,message=>{const notice=$('#map-notice');notice.hidden=!message;notice.textContent=message??'';},updateBasemapUi,updateAnalysisUi,inspectCell);
 const dronePanel=createDroneTelemetry($('#drone-telemetry'));
+const modelPanel=createModelPanel(map);
 
 function renderLayerFilters(){
   const layers=['all',...new Set(survey.findings.map(item=>item.layer??'observations').filter(name=>name!=='all'))];
@@ -182,13 +184,18 @@ window.addEventListener('phone-image',event=>{
 });
 window.addEventListener('phone-telemetry',event=>{droneTelemetry=event.detail;map.setTelemetry(droneTelemetry);dronePanel.setSample(droneTelemetry);});
 window.addEventListener('phone-locate',()=>map.locateDrone());
-function setFollow(on){
-  if(on&&$('#view-3d').getAttribute('aria-pressed')!=='true')$('#view-3d').click();
-  map.setFollow(on);$('#drone-follow').setAttribute('aria-pressed',on);$('#drone-follow').classList.toggle('active',on);$('#drone-follow-note').hidden=!on;
+function setCameraMode(mode){
+  if(mode!=='free'&&$('#view-3d').getAttribute('aria-pressed')!=='true')$('#view-3d').click();
+  map.setCameraMode(mode);
+  for(const [id,value] of [['#drone-follow','follow'],['#drone-fpv','fpv'],['#drone-view','overview']]){const on=mode===value;$(id).setAttribute('aria-pressed',on);$(id).classList.toggle('active',on);}
+  $('#drone-follow-note').hidden=mode==='free';
 }
-$('#drone-follow').onclick=()=>setFollow($('#drone-follow').getAttribute('aria-pressed')!=='true');
-setInterval(()=>{if($('#drone-follow').getAttribute('aria-pressed')==='true')$('#drone-follow-note').textContent=flightModeText[map.followMode()]??'';},1000);
-window.addEventListener('phone-results',event=>{loadSatellite(event.detail,'field_boundary_score').then(()=>{if(survey.scene?.manifestUrl===event.detail.url)map.fit();});});
+$('#drone-follow').onclick=()=>setCameraMode($('#drone-follow').getAttribute('aria-pressed')==='true'?'free':'follow');
+$('#drone-fpv').onclick=()=>setCameraMode($('#drone-fpv').getAttribute('aria-pressed')==='true'?'free':'fpv');
+$('#drone-view').onclick=()=>setCameraMode($('#drone-view').getAttribute('aria-pressed')==='true'?'free':'overview');
+setInterval(()=>{if(!$('#drone-follow-note').hidden)$('#drone-follow-note').textContent=flightModeText[map.followMode()]??'';},1000);
+window.addEventListener('phone-results-part',event=>modelPanel.status(`Receiving detail from the phone · part ${event.detail.received} of ${event.detail.total}`));
+window.addEventListener('phone-results',event=>{modelPanel.open(event.detail.manifest,event.detail.client);map.fitArea();});
 function receiveObservations(message,source){
   const findings=normaliseFeed(message);
   if(!findings.length)return false;
@@ -201,7 +208,7 @@ window.addEventListener('phone-observations',event=>{
 });
 window.addEventListener('phone-link-state',event=>{
   droneTelemetry=null;if(event.detail.connected||phoneConnected){map.setTelemetry(null);dronePanel.setConnection(event.detail.connected);}phoneConnected=event.detail.connected;
-  if(!event.detail.connected)setFollow(false);
+  if(!event.detail.connected)setCameraMode('free');
   if(!event.detail.connected&&survey.source==='Bluetooth camera module')connectionStatus('Bluetooth disconnected. Last observations retained.','Disconnected','failed');
 });
 $('#connection-form').onsubmit=event=>{

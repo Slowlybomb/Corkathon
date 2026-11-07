@@ -35,12 +35,6 @@ export function stepFlight(flight,sample,dt){
     }
     const k=1-Math.exp(-dt/.8);
     flight.latitude+=(target.latitude-flight.latitude)*k;flight.longitude+=(target.longitude-flight.longitude)*k;
-  }else if(live){
-    flight.mode='tilt';
-    const tilt=value=>Math.abs(value)<4?0:clamp((value-Math.sign(value)*4)/25,-1,1);
-    const h=(flight.heading??0)*Math.PI/180,forward=tilt(flight.pitch)*30,side=tilt(flight.roll)*30;
-    flight.latitude+=(forward*Math.cos(h)-side*Math.sin(h))*dt/METRES_PER_DEGREE;
-    flight.longitude+=(forward*Math.sin(h)+side*Math.cos(h))*dt/metresPerLon;
   }else flight.mode='hover';
   flight.latitude=clamp(flight.latitude,b.south,b.north);flight.longitude=clamp(flight.longitude,b.west,b.east);
   const heading=flight.heading??0,h=heading*Math.PI/180;
@@ -50,7 +44,6 @@ export function stepFlight(flight,sample,dt){
 
 export const flightModeText={
   gps:'Moving with phone GPS inside the survey area',
-  'gps-relative':'Phone GPS movement replayed from the survey centre (illustrative position)',
-  tilt:'No GPS fix: tilting the phone flies the drone (simulated movement)',
-  hover:'Waiting for phone orientation or GPS',
+  'gps-relative':'Phone GPS movement mapped onto the scene from its centre (illustrative position)',
+  hover:'No GPS fix yet: the drone hovers over the scene centre and turns with the phone',
 };

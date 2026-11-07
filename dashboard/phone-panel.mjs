@@ -76,13 +76,13 @@ const link=createPhoneLink({
     }
   },
 });
-const results=createResultsClient({send:(command,id,extra)=>link.send(command,id,extra)});
+const results=createResultsClient({send:(command,id,extra)=>link.send(command,id,extra),onPart:(received,total)=>window.dispatchEvent(new CustomEvent('phone-results-part',{detail:{received,total}}))});
 $('#phone-results').onclick=async()=>{
   $('#phone-results').disabled=true;$('#phone-results-status').textContent='Asking the phone for its model results…';
   try{
-    const scene=await results.requestScene();
-    $('#phone-results-status').textContent=`${scene.layers.length} layers computed on the phone. Each layer is requested over Bluetooth when chosen in Field layers.`;
-    log('Model result list received');window.dispatchEvent(new CustomEvent('phone-results',{detail:scene}));
+    const manifest=await results.requestScene();
+    $('#phone-results-status').textContent=`${manifest.layers.length} layers computed on the phone. Choose them in the Drone model panel; each is requested over Bluetooth.`;
+    log('Model result list received');window.dispatchEvent(new CustomEvent('phone-results',{detail:{manifest,client:results}}));
   }catch(error){$('#phone-results-status').textContent=error.message;failed(error);}
   finally{$('#phone-results').disabled=!connected;}
 };

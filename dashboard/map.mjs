@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { positionAt, findingsForLayer } from './survey.mjs';
+import { positionAt, findingsForLayer, routeYawAt } from './survey.mjs';
 import { demoArea, coordinatesFor, areaBounds } from './geo.mjs';
 import { createAnalysisOverlay } from './analysis-layer.mjs';
 
@@ -52,7 +52,9 @@ export function createFieldMap(container,initialSurvey,onSelect,onStatus=()=>{},
       const model=new THREE.Group();model.rotation.x=Math.PI/2;model.add(gltf.scene);
       const hover=gltf.animations.find(clip=>clip.name==='hover');
       if(hover){mixer=new THREE.AnimationMixer(gltf.scene);mixer.clipAction(hover).play();mixer.setTime(0);}
-      const bounds=new THREE.Box3().setFromObject(model),size=bounds.getSize(new THREE.Vector3());
+        // Update skin bindings before measuring the animated pose; cached bind-pose boxes are offset.
+        model.updateMatrixWorld(true);
+        const bounds=new THREE.Box3().setFromObject(model,true),size=bounds.getSize(new THREE.Vector3());
       const span=Math.max(size.x,size.y);
       if(!Number.isFinite(span)||span<=0){mixer?.stopAllAction();mixer=null;disposeObject(gltf.scene);onStatus('Drone model has invalid dimensions. The simulated position marker remains available.');return;}
       // Exaggerated display size in map metres; this is not the drone's physical size.
@@ -99,6 +101,8 @@ export function createFieldMap(container,initialSurvey,onSelect,onStatus=()=>{},
     ensureDroneModel();
     // The visual drone and 100 m height are explicitly simulated, not telemetry.
     drone.position.copy(local(point,100));drone.visible=view==='3d';
+    const yaw=routeYawAt(survey.route,time,local);
+    if(yaw!==null)drone.rotation.z=yaw;
     mixer?.setTime(reduced?0:time);
     map.triggerRepaint();
   }

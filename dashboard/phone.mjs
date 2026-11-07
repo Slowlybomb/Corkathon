@@ -12,13 +12,13 @@ export function createPacketReader(onPacket,onError=()=>{},limit=65536){
         if(!discard&&bytes.length){
           let packet;
           try{packet=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(Uint8Array.from(bytes)));if(!packet||typeof packet!=='object'||Array.isArray(packet))throw new Error();}
-          catch{packet=null;onError('Invalid phone packet.');}
+          catch{packet=null;onError('Invalid camera module packet.');}
           if(packet)onPacket(packet);
         }
         bytes=[];discard=false;
       }else if(!discard){
         bytes.push(byte);
-        if(bytes.length>limit){bytes=[];discard=true;onError('Phone packet exceeded the size limit.');}
+        if(bytes.length>limit){bytes=[];discard=true;onError('Camera module packet exceeded the size limit.');}
       }
     }
   };
@@ -37,14 +37,14 @@ export function createPhoneLink({bluetooth=globalThis.navigator?.bluetooth,onSta
     const session=epoch,characteristic=rx,data=new TextEncoder().encode(JSON.stringify(packet)+'\n');
     const result=writes.then(async()=>{
       for(let offset=0;offset<data.length;offset+=20){
-        if(session!==epoch||!characteristic)throw new Error('Phone disconnected. Connect again.');
+        if(session!==epoch||!characteristic)throw new Error('Camera module disconnected. Connect again.');
         await characteristic.writeValueWithResponse(data.slice(offset,offset+20));
       }
     });
     writes=result.catch(()=>{});return result;
   }
   async function connect(pin){
-    if(!/^\d{6}$/.test(pin))throw new Error('Enter the six-digit code shown on the phone.');
+    if(!/^\d{6}$/.test(pin))throw new Error('Enter the six-digit code shown on the camera module.');
     if(!bluetooth)throw new Error('Open localhost or HTTPS in desktop Chrome with Bluetooth enabled.');
     disconnect();const session=epoch;onState('connecting');
     try{
@@ -63,13 +63,13 @@ export function createPhoneLink({bluetooth=globalThis.navigator?.bluetooth,onSta
       tx.addEventListener('characteristicvaluechanged',notify);await tx.startNotifications();
       if(session!==epoch)return;
       onState('authenticating');
-      authTimer=setTimeout(()=>{onError('Phone did not accept the code. Check its screen and reconnect.');disconnect();},10000);
+      authTimer=setTimeout(()=>{onError('Camera module did not accept the code. Check its screen and reconnect.');disconnect();},10000);
       await write({v:1,type:'command',command:'hello',pin});
     }catch(error){if(session===epoch)disconnect();throw error;}
   }
   async function send(command,id=globalThis.crypto.randomUUID()){
-    if(!ready)throw new Error('Connect the phone first.');
-    if(!['ping','capture','stop_camera'].includes(command))throw new Error('Unsupported phone command.');
+    if(!ready)throw new Error('Connect the camera module first.');
+    if(!['ping','capture','stop_camera'].includes(command))throw new Error('Unsupported camera module command.');
     await write({v:1,type:'command',command,id});return id;
   }
   return {connect,disconnect,send};

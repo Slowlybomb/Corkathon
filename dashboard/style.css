@@ -71,3 +71,20 @@ button,input,select{font:inherit}button{cursor:pointer;color:inherit;border:0;ba
 .legend #cell-readout{font-size:10px;line-height:1.7;margin-top:8px;min-height:34px}
 .analysis-tooltip{position:absolute;z-index:7;max-width:min(290px,calc(100vw - 24px));padding:10px 13px;font-size:11px;line-height:1.6;pointer-events:none}
 @media(max-width:700px){.analysis-controls{padding:12px 12px 4px}.analysis-title{font-size:11px}.analysis-slider{font-size:11px}}
+
+@media(max-width:520px){.toolbar .field-context{display:none}.toolbar .brand{margin-right:auto}.toolbar .connection-toggle{flex-shrink:0}}
+
+/* Anchored panels share pointer, touch, and keyboard resize controls. */
+.resizable-panel{display:flex;flex-direction:column;overflow:hidden;max-width:calc(100vw - 24px);padding-bottom:14px}
+.resizable-panel[popover]:not(:popover-open){display:none}
+.resizable-panel>#layer-content,.resizable-panel>#observations-content,.resizable-panel>.phone-content,.resizable-panel>#connection-form{flex:1;min-height:0;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--sage) transparent}
+.resizable-panel[data-sized] .finding-list{max-height:none}
+.resizable-panel[data-resize=ne]>.panel-heading{padding-right:34px}
+.resizable-panel:has(>.panel-heading [aria-expanded=false]){height:auto!important;padding-bottom:0}
+.resizable-panel:has(>.panel-heading [aria-expanded=false])>.panel-resize{display:none}
+.resizable-panel[data-resizing]{user-select:none}
+.panel-resize{position:absolute;left:0;bottom:0;width:28px;height:28px;display:grid;place-items:center;padding:6px;color:var(--muted);cursor:nesw-resize;touch-action:none;border-radius:0 6px 0 var(--radius);z-index:1}
+.panel-resize .icon{width:16px;height:16px}
+.panel-resize:focus-visible{outline-offset:-3px}
+.resizable-panel[data-resize=ne]>.panel-resize{left:auto;bottom:auto;right:0;top:0;transform:rotate(180deg)}
+.panel-resize:hover,.panel-resize:active{color:var(--cream);background:rgba(254,254,227,.1)}

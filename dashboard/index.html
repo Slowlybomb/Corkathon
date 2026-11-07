@@ -26,40 +26,40 @@
       <a href="./" class="brand" aria-label="Ithir home"><svg class="icon"><use href="#i-field"/></svg><span>Ithir</span></a>
       <span class="toolbar-divider"></span>
       <div class="field-context"><h1>Cork survey area</h1><span id="survey-context">No survey loaded</span></div>
-      <button id="phone-toggle" class="button connection-toggle" popovertarget="phone-panel"><span class="status-dot" id="phone-dot"></span>Phone</button>
+      <button id="phone-toggle" class="button connection-toggle" popovertarget="phone-panel"><span class="status-dot" id="phone-dot"></span>Camera module</button>
       <button id="connection-toggle" class="button connection-toggle" aria-expanded="false" aria-controls="connection-panel"><span class="status-dot" id="connection-dot"></span><span id="connection-label">Data source</span><svg class="icon"><use href="#i-settings"/></svg></button>
     </header>
-    <section id="connection-panel" class="floating-surface setup-panel" aria-labelledby="setup-title" hidden>
+    <section id="connection-panel" class="floating-surface setup-panel" data-resize="sw" aria-labelledby="setup-title" hidden>
       <div class="panel-heading"><h2 id="setup-title">Data source</h2><button class="icon-button close-panel" aria-label="Close connection setup">×</button></div>
       <form id="connection-form">
         <label for="source">Data source</label><select id="source"><option value="" disabled selected>Choose a source</option><option value="live">Observation feed</option><option value="demo">Sample survey · illustrative</option></select>
         <div id="endpoint-fields" hidden><label for="endpoint">WebSocket address</label><input id="endpoint" type="url" disabled placeholder="ws://192.168.1.10:8080" autocomplete="off"><small>Use wss:// when this page is served over HTTPS.</small></div>
-        <p id="connection-status" class="connection-status" role="status">Connect a phone over Bluetooth, or choose an observation feed.</p>
+        <p id="connection-status" class="connection-status" role="status">Connect a camera module over Bluetooth, or choose an observation feed.</p>
         <button class="button primary" type="submit">Load source</button>
       </form>
     </section>
-    <section id="phone-panel" popover="auto" class="floating-surface phone-panel" aria-labelledby="phone-title">
-      <div class="panel-heading"><h2 id="phone-title">Camera Module</h2><button class="icon-button" popovertarget="phone-panel" popovertargetaction="hide" aria-label="Close phone">×</button></div>
+    <section id="phone-panel" popover="auto" class="floating-surface phone-panel" data-resize="sw" aria-labelledby="phone-title">
+      <div class="panel-heading"><h2 id="phone-title">Camera module</h2><button class="icon-button" popovertarget="phone-panel" popovertargetaction="hide" aria-label="Close camera module">×</button></div>
       <div class="phone-content">
         <p id="phone-status" role="status">Disconnected. Start Bluetooth in the Android app.</p>
         <form id="phone-form">
-          <label for="phone-pin">Phone connection code</label>
-          <input id="phone-pin" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" minlength="6" autocomplete="off" required placeholder="Six digits from the phone">
+          <label for="phone-pin">Camera module connection code</label>
+          <input id="phone-pin" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" minlength="6" autocomplete="off" required placeholder="Six digits from the module">
           <div class="phone-actions"><button id="phone-connect" class="button primary" type="submit">Connect Bluetooth</button><button id="phone-disconnect" class="button" type="button" disabled>Disconnect</button></div>
         </form>
         <p id="phone-support" class="phone-note">Bluetooth LE · Chrome on localhost or HTTPS.</p>
         <dl class="phone-readings"><div><dt>Camera</dt><dd id="phone-camera">Unknown</dd></div><div><dt>Model</dt><dd id="phone-model">Not connected</dd></div><div><dt>Battery</dt><dd id="phone-battery">Unknown</dd></div><div><dt>Link</dt><dd id="phone-link-mode">Bluetooth LE</dd></div></dl>
-        <div class="phone-actions"><button id="phone-ping" class="button" disabled>Ping phone</button><button id="phone-capture" class="button primary" disabled>Request image</button><button id="phone-stop" class="button" disabled>Stop camera</button></div>
-        <p id="phone-request-status" class="phone-note" role="status">Capture starts only when requested and allowed on the phone.</p>
-        <figure id="phone-image-wrap" hidden><img id="phone-image" alt="Requested phone camera capture"><figcaption id="phone-image-caption"></figcaption></figure>
-        <details><summary>Connection log</summary><ol id="phone-log" class="phone-log" aria-label="Phone connection log"></ol></details>
+        <div class="phone-actions"><button id="phone-ping" class="button" disabled>Test connection</button><button id="phone-capture" class="button primary" disabled>Request image</button><button id="phone-stop" class="button" disabled>Stop camera</button></div>
+        <p id="phone-request-status" class="phone-note" role="status">Capture starts only when requested and allowed on the camera module.</p>
+        <figure id="phone-image-wrap" hidden><img id="phone-image" alt="Requested camera module capture"><figcaption id="phone-image-caption"></figcaption></figure>
+        <details><summary>Connection log</summary><ol id="phone-log" class="phone-log" aria-label="Camera module connection log"></ol></details>
       </div>
     </section>
     <div id="basemap-switch" class="basemap-switch view-switch floating-surface" role="group" aria-label="Basemap">
       <button data-basemap="map" aria-pressed="false">Map</button>
       <button data-basemap="satellite" class="active" aria-pressed="true">Satellite</button>
     </div>
-    <section class="floating-surface layers-panel" hidden aria-labelledby="layer-title">
+    <section class="floating-surface layers-panel" data-resize="ne" hidden aria-labelledby="layer-title">
       <div class="panel-heading"><h2 id="layer-title"><svg class="icon"><use href="#i-layers"/></svg>Field layers</h2><button id="layers-toggle" class="icon-button" aria-expanded="true" aria-controls="layer-content" aria-label="Collapse field layers"><svg class="icon"><use href="#i-chevron"/></svg></button></div>
       <div id="layer-content">
         <div id="layers" class="layer-options" role="group" aria-label="Analysis layer">
@@ -78,7 +78,7 @@
         <div class="legend" hidden><div class="legend-scale"></div><div class="legend-labels"><span id="analysis-min">—</span><span id="analysis-unit">No data</span><span id="analysis-max">—</span></div><p id="legend-note">Awaiting numeric model data.</p><div class="analysis-footer"><span id="analysis-count">0 cells</span><div class="cell-navigation" role="group" aria-label="Inspect analysis cells"><button id="cell-previous" class="icon-button" aria-label="Inspect previous cell">‹</button><button id="cell-next" class="icon-button" aria-label="Inspect next cell">›</button></div></div><p id="cell-readout" role="status">Hover, tap, or use arrows to inspect cells.</p></div>
       </div>
     </section>
-    <section class="floating-surface observations-panel" aria-labelledby="observations-title">
+    <section class="floating-surface observations-panel" data-resize="sw" aria-labelledby="observations-title">
       <div class="panel-heading"><h2 id="observations-title">Observations <span class="count" id="finding-count">0</span></h2><button id="export" class="icon-button" aria-label="Export findings" title="Export findings" disabled><svg class="icon"><use href="#i-download"/></svg></button><button id="observations-toggle" class="icon-button" aria-expanded="true" aria-controls="observations-content" aria-label="Collapse observations"><svg class="icon"><use href="#i-chevron"/></svg></button></div>
       <div id="observations-content"><div id="finding-list" class="finding-list" aria-label="Survey findings"></div><div id="finding-detail" class="finding-detail" aria-live="polite"></div></div>
     </section>
@@ -96,6 +96,7 @@
     <div id="analysis-tooltip" class="analysis-tooltip floating-surface" aria-hidden="true" hidden></div>
     <div id="toast" class="toast floating-surface" role="status" hidden></div>
   </main>
+  <script type="module" src="panels.mjs"></script>
   <script type="module" src="phone-panel.mjs"></script>
   <script type="module">
     import('./app.mjs').catch(error => {

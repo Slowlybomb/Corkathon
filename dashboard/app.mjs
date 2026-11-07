@@ -23,7 +23,7 @@ function renderFindings(){
     button.innerHTML=`<span class="finding-number ${finding.tone==='teal'?'teal':''}">${number}</span><span class="finding-copy"><strong>${escape(finding.title)}</strong><small>${survey.illustrative?formatTime(finding.time):escape(finding.status)}</small></span><svg class="icon" aria-hidden="true"><use href="#i-chevron"/></svg>`;
     button.onclick=()=>selectFinding(finding.id);$('#finding-list').append(button);
   });
-  if(!findings.length)$('#finding-list').innerHTML=survey.findings.length?'<div class="empty-state"><h3>No observations in this layer</h3><p>Choose another layer to see available findings.</p></div>':'<div class="empty-state"><h3>Your field observations, here.</h3><p>Connect your phone or an observation feed to start reviewing your survey.</p><button id="empty-connect" class="button primary">Connect a source</button></div>';
+  if(!findings.length)$('#finding-list').innerHTML=survey.findings.length?'<div class="empty-state"><h3>No observations in this layer</h3><p>Choose another layer to see available findings.</p></div>':'<div class="empty-state"><h3>Your field observations, here.</h3><p>Connect your camera module or an observation feed to start reviewing your survey.</p><button id="empty-connect" class="button primary">Connect a source</button></div>';
   $('#empty-connect')?.addEventListener('click',()=>toggleSetup(true));
   $('.layers-panel').hidden=!survey.findings.length;
   $('#export').disabled=!survey.findings.length;
@@ -146,14 +146,14 @@ function receiveObservations(message,source){
   if(!findings.length)return false;
   survey.findings=findings;survey.source=source;survey.illustrative=false;survey.route=[];survey.duration=0;elapsed=0;selected=findings[0].id;playing=false;
   map.setSurvey(survey);renderFindings();updateReplay();
-  connectionStatus(`Received ${findings.length} observations. Results remain unvalidated.`,source==='Bluetooth phone'?'Bluetooth feed':'Connected','connected');
+  connectionStatus(`Received ${findings.length} observations. Results remain unvalidated.`,source==='Bluetooth camera module'?'Camera module feed':'Connected','connected');
   return true;
 }
 window.addEventListener('phone-observations',event=>{
-  if(receiveObservations(event.detail,'Bluetooth phone')&&socket){socket.onclose=null;socket.close();socket=null;}
+  if(receiveObservations(event.detail,'Bluetooth camera module')&&socket){socket.onclose=null;socket.close();socket=null;}
 });
 window.addEventListener('phone-link-state',event=>{
-  if(!event.detail.connected&&survey.source==='Bluetooth phone')connectionStatus('Bluetooth disconnected. Last observations retained.','Disconnected','failed');
+  if(!event.detail.connected&&survey.source==='Bluetooth camera module')connectionStatus('Bluetooth disconnected. Last observations retained.','Disconnected','failed');
 });
 $('#connection-form').onsubmit=event=>{
   event.preventDefault();
@@ -177,7 +177,7 @@ $('#connection-form').onsubmit=event=>{
     try{if(!receiveObservations(JSON.parse(event.data),'Connected WebSocket feed'))connectionStatus('Message received, but no usable geographic or sample-grid positions. Existing data retained.','Connected','connected');
     }catch{connectionStatus('Message could not be read as JSON. Existing observations retained.','Connected','connected');}
   };
-  current.onerror=()=>{if(socket===current)connectionStatus('Connection failed. Check the address and that the phone or AI feed is running.','Connection failed','failed');};
+  current.onerror=()=>{if(socket===current)connectionStatus('Connection failed. Check the address and that the camera module or observation feed is running.','Connection failed','failed');};
   current.onclose=()=>{if(socket===current)connectionStatus('Connection closed. Last observations retained; apply the connection to reconnect.','Disconnected','failed');};
 };
 let lastDraw=0;

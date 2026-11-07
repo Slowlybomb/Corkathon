@@ -51,7 +51,7 @@ public final class MainActivity extends Activity {
         LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(20),dp(20),dp(20),dp(12)); root.setBackgroundColor(INK);
         setContentView(root);
-        text(root,"Ithir Phone",24,CREAM).setTypeface(null,Typeface.BOLD);
+        text(root,"Ithir Camera Module",24,CREAM).setTypeface(null,Typeface.BOLD);
         text(root,"Camera module · stationary capture",14,MUTED);
         status=text(root,"Bluetooth stopped",18,CREAM);
         code=text(root,"Start Bluetooth to get a connection code",15,MUTED);
@@ -95,7 +95,7 @@ public final class MainActivity extends Activity {
         }
         if(adapter==null){log("Bluetooth is unavailable on this device");return;}
         if(!adapter.isEnabled()){startActivity(new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE));log("Enable Bluetooth, then tap Start Bluetooth again");return;}
-        if(adapter.getBluetoothLeAdvertiser()==null){log("This phone does not support BLE advertising");return;}
+        if(adapter.getBluetoothLeAdvertiser()==null){log("This device does not support BLE advertising");return;}
         try{
             pin=String.format(Locale.ROOT,"%06d",new SecureRandom().nextInt(1000000));
             server=getSystemService(BluetoothManager.class).openGattServer(this,callbacks);
@@ -115,7 +115,7 @@ public final class MainActivity extends Activity {
         catch(Exception exception){log("Advertising failed: "+exception.getMessage());stopBluetooth();}
     }
     private final AdvertiseCallback advertising=new AdvertiseCallback(){
-        @Override public void onStartSuccess(AdvertiseSettings settings){main.post(()->{if(running){status.setText("Waiting for ground station");log("BLE service visible. Enter this phone's code in the dashboard.");}});}
+        @Override public void onStartSuccess(AdvertiseSettings settings){main.post(()->{if(running){status.setText("Waiting for ground station");log("BLE service visible. Enter the camera module's code in the dashboard.");}});}
         @Override public void onStartFailure(int error){main.post(()->{log("BLE advertising failed: "+error);stopBluetooth();});}
     };
     private void clearPeer(){
@@ -185,8 +185,8 @@ public final class MainActivity extends Activity {
             switch(name){
                 case "ping": send(packet("pong","id",id));sendStatus();break;
                 case "capture":
-                    if(!armed.isChecked()){send(packet("error","id",id,"message","Allow camera requests on the phone first"));break;}
-                    if(camera.active||captureId!=null||!outgoing.isEmpty()){send(packet("error","id",id,"message","Phone busy; wait for the current transfer"));break;}
+                    if(!armed.isChecked()){send(packet("error","id",id,"message","Allow camera requests on the camera module first"));break;}
+                    if(camera.active||captureId!=null||!outgoing.isEmpty()){send(packet("error","id",id,"message","Camera module busy; wait for the current transfer"));break;}
                     captureId=id;send(packet("ack","id",id,"command",name));
                     camera.capture(jpeg->{String completed=captureId;captureId=null;updateCamera();log("Captured "+jpeg.length+" bytes; camera off; sending image");send(packet("image","id",completed,"capturedAt",System.currentTimeMillis(),"mime","image/jpeg","base64",Base64.encodeToString(jpeg,Base64.NO_WRAP)));sendStatus();},message->{captureId=null;updateCamera();log(message);send(packet("error","id",id,"message",message));sendStatus();});
                     updateCamera();break;

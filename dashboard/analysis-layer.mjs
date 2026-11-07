@@ -3,7 +3,7 @@ import { buildAnalysis, valueColor } from './analysis.mjs';
 // One deck.gl overlay shares MapLibre's WebGL context; Three.js keeps the drone.
 export function createAnalysisOverlay(map,{beforeId,onChange=()=>{},onInspect=()=>{},onError=()=>{}}={}){
   const deck=window.deck;
-  if(!deck?.MapLibreOverlay||!deck?.ColumnLayer){onError('Analysis library could not load. Reload with internet access; the map and phone link remain available.');return null;}
+  if(!deck?.MapLibreOverlay||!deck?.ColumnLayer){onError('Analysis library could not load. Reload with internet access; the map and camera module link remain available.');return null;}
   let survey={findings:[]},filter='all',view='3d',data=buildAnalysis(survey,filter);
   let settings={mode:'columns',opacity:.76,radius:80,heightScale:1},selectedIndex=-1;
   const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;

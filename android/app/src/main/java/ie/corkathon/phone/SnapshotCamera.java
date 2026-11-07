@@ -45,7 +45,7 @@ final class SnapshotCamera {
     void capture(Consumer<byte[]> receive, Consumer<String> error) {
         if (active) { error.accept("Camera is busy"); return; }
         if (activity.checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            error.accept("Allow camera access on the phone first"); return;
+            error.accept("Allow camera access on the camera module first"); return;
         }
         active = true;
         final int current = ++generation;

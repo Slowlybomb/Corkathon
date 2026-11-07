@@ -66,6 +66,8 @@ This file is the current visual authority. Product and data responsibilities rem
 
 Use cream or ink on filled controls as appropriate. Sage and ochre are not small-text colours on cream. Every heatmap needs a visible legend; every status needs words as well as colour. Sample intensity is not a soil measurement. Do not add blue, purple, red, or neon interface accents.
 
+Use **Camera module** for the connected camera and computing unit in product labels and messages.
+
 ## Typography
 
 Use Manrope with the declared local fallbacks. Short, sentence-case labels take priority. Field names and findings provide the hierarchy; there is no marketing headline above the map. Metadata is subordinate, with tabular numbers for times and readings. Do not add decorative uppercase labels or technical-looking monospace text.
@@ -84,6 +86,8 @@ Use Manrope with the declared local fallbacks. Short, sentence-case labels take 
 Ithir opens with an empty workspace and a connection action. The sample survey is optional under Data source. Hide layers until observations arrive, the intensity legend without supporting numeric data, and replay without a route. Export belongs beside the observations. Keep the Ithir name visible on small screens and omit fixed survey dates and duplicate map-context labels.
 
 Maintain roughly 24 px desktop edge insets and 12 px on smaller screens. Controls should leave the central field usable. At phone sizes, modules initially collapse to headings and expand on demand; they must not force page scrolling. Connection setup is a small anchored panel, not a separate settings page.
+
+Field layers, Observations, Camera module, and Data source can be resized using their corner grip. Keep their existing anchors and constrain size to the viewport. Support touch, arrow keys, Shift for larger steps, and Home or double-click to restore the default size. Collapsing preserves the chosen expanded size for the current page session; long content scrolls inside the panel.
 
 ## Elevation & Depth
 
@@ -114,6 +118,7 @@ Check for an existing component before adding one. Reuse a working module or ext
 | Geographic placement | `dashboard/geo.mjs` and MapLibre Mercator coordinates | Preserve supplied WGS84 positions; map temporary sample x/y through the geographic extent; use the engine camera in 3D |
 | Replay and filtering | `dashboard/survey.mjs` | Preserve interpolation and filtering rather than duplicating them in UI code |
 | Floating surface | `.floating-surface` in `dashboard/style.css` | Shared material for toolbar, modules, settings, and playback |
+| Panel resizing | `dashboard/panels.mjs` and `[data-resize]` | Reuse anchored pointer/touch and keyboard resizing; preserve disclosure and internal scrolling |
 | Module heading/disclosure | `.panel-heading` and `wireDisclosure` in `app.mjs` | Same collapse behaviour and accessible expanded state for layers and observations |
 | Basemap switch | `.view-switch` styling, `setBasemap` in `map.mjs` | Toggle the satellite raster layer above the drawn basemap and below survey overlays; do not replace the style or shared WebGL context |
 | Buttons | `.button`, `.primary`, `.icon-button` | Reuse size, hover, focus, and disabled treatment; icon-only controls require accessible names |

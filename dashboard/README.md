@@ -10,7 +10,7 @@ Open http://localhost:5173. No installation or build step is required. Internet 
 
 The map starts at **latitude 51.949961, longitude -8.220098**. The exact supplied corners and UTM29N references are in [DEMO_AREA.md](../docs/DEMO_AREA.md) and `geo.mjs`.
 
-The workspace opens empty. Use **Phone** to connect the Android companion, or **Data source** to choose a WebSocket observation feed or the optional illustrative sample survey. Replay and synthetic analysis appear only with the sample survey.
+The workspace opens empty. Use **Camera module** to connect the Android companion, or **Data source** to choose a WebSocket observation feed or the optional illustrative sample survey. Replay and synthetic analysis appear only with the sample survey.
 
 ## Controls
 
@@ -20,11 +20,13 @@ The workspace opens empty. Use **Phone** to connect the Android companion, or **
 - Drag to pan, right-drag or Ctrl-drag to rotate/tilt, scroll or use buttons to zoom, and Fit to show the survey extent. Touch navigation uses MapLibre's native gestures.
 - Select findings on the map or in the accessible list. Export from the observations heading. The sample survey adds playback, scrubbing, and replay speed controls.
 - Open **Data source** for an observation feed or the sample survey. The feed opens a real WebSocket and reports connection and error states.
-- Open **Phone** for the Android companion's actual Bluetooth connection, status, logs, and requested still images. Follow [PHONE_LINK.md](../docs/PHONE_LINK.md) for the APK and connection steps. No model or continuous video runs yet.
+- Open **Camera module** for the Android companion's actual Bluetooth connection, status, logs, and requested still images. Follow [PHONE_LINK.md](../docs/PHONE_LINK.md) for the APK and connection steps. No model or continuous video runs yet.
 - In **3D**, zoom out to see the globe. MapLibre smoothly returns to Mercator at field scale; local Three.js meshes render once that transition completes. **2D** stays flat. Both basemaps use the selected projection.
 - The owner's [textured drone model](assets/drone/README.md) loads only when a survey route is present, keeping its 5.3 MB download out of empty startup. Its `hover` animation follows replay time, including pause and scrubbing; reduced motion fixes its pose. Display size, altitude, and route remain illustrative. The position dot works in 2D, on the globe, and if model loading fails.
 
 The page does not scroll. Long floating panels scroll internally; on compact screens, layers and observations initially collapse.
+
+Resize Field layers from its upper-right grip, and Observations, Camera module, or Data source from the lower-left grip. Drag with a mouse or touch, or focus the grip and use arrow keys (Shift for larger steps). Press Home or double-click the grip to reset. Panels stay within the viewport; collapsing preserves the expanded size until the page reloads.
 
 ## Field analysis
 
@@ -54,4 +56,12 @@ Map uses OpenFreeMap; Satellite uses Esri World Imagery satellite/aerial tiles, 
 node --test dashboard/*.test.mjs
 ```
 
-The Node checks cover geographic placement, malformed feeds, replay, filtering, phone packets, the packaged drone asset, and analysis data/controller behavior. Chromium checks verified empty startup, optional sample playback, received-observation transitions, 2D/3D switching, and viewport bounds at 1440 × 960 and 390 × 844. The integrated analysis layer was visually reviewed. Physical Bluetooth and camera operation require a phone.
+Panel interaction checks run in Chrome/Chromium with no npm dependencies:
+
+```sh
+CHROME=/path/to/chrome node scripts/check-panels.mjs
+```
+
+The browser check needs internet access for the map libraries and exercises mouse, touch, a second finger, keyboard resizing, reset, collapse, anchors, and viewport bounds. Screenshots are written to the system temporary directory.
+
+The Node checks cover geographic placement, malformed feeds, replay, filtering, camera module packets, the packaged drone asset, and analysis data/controller behavior. Chromium checks verified empty startup, optional sample playback, received-observation transitions, 2D/3D switching, and viewport bounds at 1440 × 960 and 390 × 844. The integrated analysis layer was visually reviewed. Physical Bluetooth and camera operation require a camera module.

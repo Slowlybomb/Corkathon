@@ -38,5 +38,5 @@ export function buildAnalysis(survey,layer,radius=80){
   if(!valued.length)return empty;
   const min=Math.min(...valued.map(item=>item.value)),max=Math.max(...valued.map(item=>item.value));
   const cells=valued.map(item=>({id:item.id,sourceId:item.id,position:coordinatesFor(item),value:item.value,normalised:max===min?.5:(item.value-min)/(max-min)}));
-  return {...empty,cells,min,max,metric:valued[0].metric??'Model value',unit:valued[0].unit??'',note:'Received values · unvalidated · display radius is illustrative'};
+  return {...empty,cells,min,max,metric:valued[0].metric??'Model value',unit:valued[0].unit??'',note:survey.scene?.note??'Received values · unvalidated · display radius is illustrative'};
 }

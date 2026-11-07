@@ -1,4 +1,4 @@
-import { createPhoneLink } from './phone.mjs';
+import { createPhoneLink, cameraImageEvidence } from './phone.mjs';
 
 const $=selector=>document.querySelector(selector);
 let connected=false,pending=null,timer,bytes=0,receiving=false;
@@ -39,10 +39,11 @@ const link=createPhoneLink({
       case 'ack':if(packet.id===pending){receiving=true;$('#phone-request-status').textContent='Camera module accepted the image request. Capturing and transferring…';}break;
       case 'image':{
         if(packet.id!==pending){log('Ignored image from a cancelled or expired request');break;}
-        if(packet.mime!=='image/jpeg'||typeof packet.base64!=='string'||packet.base64.length>44000||!/^\/9j\/[A-Za-z0-9+/]*={0,2}$/.test(packet.base64)){finish('Camera module returned an invalid image.');break;}
-        $('#phone-image').src=`data:image/jpeg;base64,${packet.base64}`;$('#phone-image-wrap').hidden=false;
-        const captured=new Date(packet.capturedAt);
-        $('#phone-image-caption').textContent=`Stationary camera module capture · ${Number.isFinite(captured.getTime())?captured.toLocaleString():'capture time unavailable'} · location not attached`;
+        const image=cameraImageEvidence(packet);
+        if(!image){finish('Camera module returned an invalid image.');break;}
+        $('#phone-image').src=image.src;$('#phone-image-wrap').hidden=false;
+        $('#phone-image-caption').textContent=`Stationary camera module capture · ${image.capturedAt?new Date(image.capturedAt).toLocaleString():'capture time unavailable'} · location not attached`;
+        window.dispatchEvent(new CustomEvent('phone-image',{detail:image}));
         finish('Image received. Camera is released after capture; this is a still image.');log('Image received');break;
       }
       case 'error':log(packet.message??'Camera module error');if(!packet.id||packet.id===pending)finish(String(packet.message??'Camera module request failed').slice(0,500));else failed(String(packet.message??'Camera module command failed'));break;

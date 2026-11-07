@@ -9,7 +9,13 @@ import assert from 'node:assert/strict';
 const root=fileURLToPath(new URL('../dashboard',import.meta.url));
 const profile=await mkdtemp(resolve(tmpdir(),'ithir-panel-check-'));
 const executable=process.env.CHROME??'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-const server=createServer(async(req,res)=>{try{const name=decodeURIComponent(new URL(req.url,'http://localhost').pathname);const file=resolve(root,'.'+(name==='/'?'/index.html':name));if(!file.startsWith(root+'/'))throw new Error();res.setHeader('Content-Type',({'.html':'text/html','.mjs':'text/javascript','.css':'text/css'})[extname(file)]??'application/octet-stream');res.end(await readFile(file));}catch{res.writeHead(404);res.end();}});
+const sceneManifest={name:'Integration fixture · illustrative satellite values',crs:'EPSG:32629',width:2,height:2,pixel_size_m:200,origin_x:553400,origin_y:5755960,nodata_float32:-9999,
+  layers:[{name:'ndvi',file:'layers/ndvi.f32',type:'float32',units:'index',group:'surface'},{name:'ph_0-5cm',file:'layers/ph_0-5cm.f32',type:'float32',units:'pH',group:'soil',depth_cm:[0,5]}],notes:'Test fixture only; no field measurements.',sources:'Browser integration fixture'};
+const server=createServer(async(req,res)=>{try{const name=decodeURIComponent(new URL(req.url,'http://localhost').pathname);
+  if(name==='/fixture/manifest.json'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify(sceneManifest));return;}
+  if(name==='/fixture/slow-manifest.json'){res.setHeader('Content-Type','application/json');setTimeout(()=>res.end(JSON.stringify(sceneManifest)),350);return;}
+  if(name.startsWith('/fixture/layers/')){const values=name.includes('ndvi')?[0,-9999,.5,.75]:[4,5,6,7],buffer=Buffer.alloc(16);values.forEach((v,i)=>buffer.writeFloatLE(v,i*4));res.end(buffer);return;}
+  const file=resolve(root,'.'+(name==='/'?'/index.html':name));if(!file.startsWith(root+'/'))throw new Error();res.setHeader('Content-Type',({'.html':'text/html','.mjs':'text/javascript','.css':'text/css'})[extname(file)]??'application/octet-stream');res.end(await readFile(file));}catch{res.writeHead(404);res.end();}});
 await new Promise(done=>server.listen(0,'127.0.0.1',done));
 const port=server.address().port;
 const chrome=spawn(executable,['--headless=new','--no-first-run','--no-default-browser-check','--remote-debugging-port=0','--user-data-dir='+profile,'--enable-unsafe-swiftshader','about:blank'],{stdio:['ignore','ignore','pipe']});
@@ -25,7 +31,18 @@ try{
   const c=(method,params)=>command(method,params,sessionId);
   const evaluate=async(expression)=>{const r=await c('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});if(r.exceptionDetails)throw new Error(JSON.stringify(r.exceptionDetails));return r.result.value;};
   await c('Page.enable');await c('Runtime.enable');await c('Network.enable');
-
+  // Only the Bluetooth radio is doubled. Packets, request matching, evidence and UI run for real.
+  await c('Page.addScriptToEvaluateOnNewDocument',{source:`(${function(){
+    const tx=new EventTarget(),device=new EventTarget();let input='';
+    const emit=packet=>{const bytes=new TextEncoder().encode(JSON.stringify({v:1,...packet})+'\n');for(let i=0;i<bytes.length;i+=20){const event=new Event('characteristicvaluechanged');Object.defineProperty(event,'target',{value:{value:new DataView(bytes.slice(i,i+20).buffer)}});tx.dispatchEvent(event);}};
+    tx.startNotifications=async()=>tx;device.name='Fixture camera module';
+    const rx={async writeValueWithResponse(bytes){input+=new TextDecoder().decode(bytes);if(!input.endsWith('\n'))return;const command=JSON.parse(input);input='';
+      if(command.command==='hello')emit({type:'ready'});
+      if(command.command==='capture'){emit({type:'ack',id:command.id});const canvas=document.createElement('canvas');canvas.width=20;canvas.height=20;const context=canvas.getContext('2d');context.fillStyle='#4c956c';context.fillRect(0,0,20,20);emit({type:'image',id:command.id,capturedAt:1794056400000,mime:'image/jpeg',base64:canvas.toDataURL('image/jpeg').split(',')[1]});}
+    }};
+    device.gatt={connected:true,disconnect(){this.connected=false;device.dispatchEvent(new Event('gattserverdisconnected'));},async connect(){this.connected=true;return {async getPrimaryService(){return {async getCharacteristic(uuid){return uuid.startsWith('aa7a0003')?tx:rx;}};}};}};
+    Object.defineProperty(navigator,'bluetooth',{value:{async requestDevice(){return device;}}});
+  }.toString()})()`});
 
   const until=async(expression,label)=>{const end=Date.now()+45000;while(Date.now()<end){if(await evaluate('Boolean('+expression+')'))return;await new Promise(r=>setTimeout(r,100));}throw new Error('Timed out: '+label);};
   const box=selector=>evaluate(`document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect().toJSON()`);
@@ -61,6 +78,7 @@ try{
   await c('Emulation.setDeviceMetricsOverride',{width:1440,height:960,deviceScaleFactor:1,mobile:false});
   await c('Page.navigate',{url:`http://localhost:${port}/`});
   await until(`document.querySelector('#play')?.dataset.playing && document.querySelectorAll('.panel-resize').length===4`,'app and resize controls');
+  assert.equal(await evaluate(`!!document.querySelector('#source option[value="scene"]')`),true,'Satellite package is a selectable source');
   assert.equal((await box('#phone-panel')).height,0,'Closed camera popover must stay hidden');
   const original=await box('.observations-panel');
   await drag('.observations-panel .panel-resize',-90,100);
@@ -94,6 +112,34 @@ try{
   near(resized.width,640,'Maximum panel width');
   for(let i=0;i<30;i++){await press('ArrowRight',true);await press('ArrowUp',true);}
   resized=await box('.observations-panel');near(resized.width,240,'Minimum width keeps observation header controls visible');near(resized.height,160,'Minimum readable height');
+  await press('Home');
+  await click('#connection-toggle');
+  await evaluate(`(()=>{const NativeSocket=window.WebSocket;window.WebSocket=class{constructor(){window.previousFeed=this;}close(){}};document.querySelector('#source').value='live';document.querySelector('#source').dispatchEvent(new Event('change'));document.querySelector('#endpoint').value='ws://localhost:1234';document.querySelector('#connection-form').requestSubmit();window.WebSocket=NativeSocket;window.previousFeed.onmessage({data:JSON.stringify({latitude:51.95,longitude:-8.22,label:'Old feed point'})});})()`);
+  assert.equal(await evaluate(`document.querySelector('#finding-count').textContent`),'1');
+  await evaluate(`window.delayedFeedMessage=window.previousFeed.onmessage;document.querySelector('#source').value='scene';document.querySelector('#source').dispatchEvent(new Event('change'));document.querySelector('#scene-url').value='/fixture/slow-manifest.json';document.querySelector('#connection-form').requestSubmit()`);
+  await evaluate(`window.delayedFeedMessage({data:JSON.stringify({latitude:51.95,longitude:-8.22,label:'Stale feed packet'})})`);
+  assert.equal(await evaluate(`document.querySelector('#connection-label').textContent`),'Loading scene','Old feed packets cannot cancel a newer scene request');
+  await until(`document.querySelector('#finding-count').textContent==='3'`,'satellite numeric pixels');
+  assert.equal(await evaluate(`document.querySelector('.replay-panel').hidden`),true,'Satellite clears simulated movement');
+  assert.match(await evaluate(`document.querySelector('#legend-note').textContent`),/sampled pixels/);
+  await evaluate(`document.querySelector('#scene-layer').value='ph_0-5cm';document.querySelector('#scene-layer').dispatchEvent(new Event('change'))`);
+  await until(`document.querySelector('#analysis-unit').textContent==='pH'`,'soil layer selection');
+  assert.equal(await evaluate(`document.querySelector('#finding-count').textContent`),'4');
+  // Failed loading must preserve the active layer and observations.
+  await click('#connection-toggle');
+  await evaluate(`document.querySelector('#scene-url').value='/fixture/missing.json';document.querySelector('#connection-form').requestSubmit()`);
+  await until(`document.querySelector('#connection-status').textContent.includes('404')`,'missing scene feedback');
+  assert.equal(await evaluate(`document.querySelector('#finding-count').textContent`),'4');
+  await click('#phone-toggle');
+  await evaluate(`document.querySelector('#phone-pin').value='123456';document.querySelector('#phone-form').requestSubmit()`);
+  await until(`!document.querySelector('#phone-capture').disabled`,'camera authentication');
+  await click('#phone-capture');
+  await until(`document.querySelector('#camera-evidence') && !document.querySelector('#camera-evidence').hidden`,'camera still evidence');
+  assert.equal(await evaluate(`document.querySelector('#finding-count').textContent`),'4','Unlocated capture does not replace satellite data');
+  assert.match(await evaluate(`document.querySelector('#camera-evidence-caption').textContent`),/location not attached/i);
+  await click('#phone-disconnect');
+  assert.equal(await evaluate(`document.querySelector('#camera-evidence').hidden`),false,'Last capture remains after disconnect');
+  await click('#phone-toggle');
   const shot=await c('Page.captureScreenshot',{format:'png'});await writeFile(resolve(tmpdir(),'ithir-panels-desktop.png'),Buffer.from(shot.data,'base64'));
   await click('#phone-toggle');
   await c('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:false});
@@ -109,5 +155,5 @@ try{
   assert.equal(page.scrollWidth,page.width);assert.equal(page.scrollHeight,page.height);
   const mobileShot=await c('Page.captureScreenshot',{format:'png'});await writeFile(resolve(tmpdir(),'ithir-panels-mobile.png'),Buffer.from(mobileShot.data,'base64'));
   assert.deepEqual(events.filter(e=>e.method==='Runtime.exceptionThrown').map(e=>e.params.exceptionDetails.text),[]);
-  console.log('Panel checks passed: mouse, touch, keyboard, reset, anchors, collapse, and viewport bounds.');
+  console.log('Panel and integration checks passed: resizing, viewport bounds, satellite package, layer selection, failed load retention, Bluetooth still evidence.');
 }finally{socket?.close();chrome.kill();await new Promise(done=>server.close(done));await new Promise(done=>chrome.exitCode!==null||chrome.signalCode!==null?done():chrome.once('exit',done));await rm(profile,{recursive:true,force:true});}

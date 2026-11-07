@@ -30,6 +30,20 @@ export function areaBounds(){
   const corners=[demoArea.topLeft,demoArea.topRight,demoArea.bottomLeft,demoArea.bottomRight];
   return [[Math.min(...corners.map(p=>p.longitude)),Math.min(...corners.map(p=>p.latitude))],[Math.max(...corners.map(p=>p.longitude)),Math.max(...corners.map(p=>p.latitude))]];
 }
+
+// Same WGS84 inverse UTM series as lib/geo/utm.cy; returns MapLibre's [lon, lat].
+export function utmToLngLat(easting,northing,crs){
+  const match=/^EPSG:(326|327)(0[1-9]|[1-5][0-9]|60)$/.exec(crs);
+  if(!match||!Number.isFinite(easting)||!Number.isFinite(northing))throw new Error('Expected WGS84 UTM coordinates.');
+  const f=1/298.257223563,n=f/(2-f),a=6378137/(1+n)*(1+n*n/4+n**4/64);
+  const xi=(northing-(match[1]==='327'?10000000:0))/(.9996*a),eta=(easting-500000)/(.9996*a);
+  const beta=[n/2-2*n*n/3+37*n**3/96,n*n/48+n**3/15,17*n**3/480];
+  let xp=xi,ep=eta;
+  beta.forEach((b,i)=>{const k=2*(i+1);xp-=b*Math.sin(k*xi)*Math.cosh(k*eta);ep-=b*Math.cos(k*xi)*Math.sinh(k*eta);});
+  const chi=Math.asin(Math.sin(xp)/Math.cosh(ep));
+  const latitude=chi+(2*n-2*n*n/3-2*n**3)*Math.sin(2*chi)+(7*n*n/3-8*n**3/5)*Math.sin(4*chi)+56*n**3/15*Math.sin(6*chi);
+  return [Number(match[2])*6-183+Math.atan2(Math.sinh(ep),Math.cos(xp))*180/Math.PI,latitude*180/Math.PI];
+}
 export function normaliseFeed(message){
   const records=Array.isArray(message)?message:message?.findings??message?.observations??[message];
   if(!Array.isArray(records))return [];

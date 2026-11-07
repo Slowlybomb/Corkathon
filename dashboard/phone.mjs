@@ -2,6 +2,13 @@ export const SERVICE='aa7a0001-7f6b-4c80-9f55-477f39b00001';
 export const RX='aa7a0002-7f6b-4c80-9f55-477f39b00001';
 export const TX='aa7a0003-7f6b-4c80-9f55-477f39b00001';
 
+export function cameraImageEvidence(packet){
+  if(packet?.v!==1||packet.type!=='image'||typeof packet.id!=='string'||!packet.id||packet.mime!=='image/jpeg'||
+    typeof packet.base64!=='string'||packet.base64.length>44000||!/^\/9j\/[A-Za-z0-9+/]*={0,2}$/.test(packet.base64))return null;
+  const capturedAt=typeof packet.capturedAt==='number'&&packet.capturedAt>0&&Number.isFinite(new Date(packet.capturedAt).getTime())?packet.capturedAt:null;
+  return {id:packet.id,src:`data:image/jpeg;base64,${packet.base64}`,mime:packet.mime,capturedAt,location:null};
+}
+
 // Byte framing keeps split UTF-8 characters intact. Discard overflow through the next newline.
 export function createPacketReader(onPacket,onError=()=>{},limit=65536){
   let bytes=[],discard=false;

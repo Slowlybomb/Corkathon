@@ -32,9 +32,10 @@
     <section id="connection-panel" class="floating-surface setup-panel" data-resize="sw" aria-labelledby="setup-title" hidden>
       <div class="panel-heading"><h2 id="setup-title">Data source</h2><button class="icon-button close-panel" aria-label="Close connection setup">×</button></div>
       <form id="connection-form">
-        <label for="source">Data source</label><select id="source"><option value="" disabled selected>Choose a source</option><option value="live">Observation feed</option><option value="demo">Sample survey · illustrative</option></select>
+        <label for="source">Data source</label><select id="source"><option value="" disabled selected>Choose a source</option><option value="scene">Satellite scene package</option><option value="live">Observation feed</option><option value="demo">Sample survey · illustrative</option></select>
         <div id="endpoint-fields" hidden><label for="endpoint">WebSocket address</label><input id="endpoint" type="url" disabled placeholder="ws://192.168.1.10:8080" autocomplete="off"><small>Use wss:// when this page is served over HTTPS.</small></div>
-        <p id="connection-status" class="connection-status" role="status">Connect a camera module over Bluetooth, or choose an observation feed.</p>
+        <div id="scene-fields" hidden><label for="scene-url">Scene manifest address</label><input id="scene-url" disabled placeholder="/out/cork/manifest.json" autocomplete="off"><small>Load the exported manifest and its layers from the same server, or a server that allows cross-origin access.</small></div>
+        <p id="connection-status" class="connection-status" role="status">Connect a camera module over Bluetooth, or load a satellite scene or observation feed.</p>
         <button class="button primary" type="submit">Load source</button>
       </form>
     </section>
@@ -62,6 +63,7 @@
     <section class="floating-surface layers-panel" data-resize="ne" hidden aria-labelledby="layer-title">
       <div class="panel-heading"><h2 id="layer-title"><svg class="icon"><use href="#i-layers"/></svg>Field layers</h2><button id="layers-toggle" class="icon-button" aria-expanded="true" aria-controls="layer-content" aria-label="Collapse field layers"><svg class="icon"><use href="#i-chevron"/></svg></button></div>
       <div id="layer-content">
+        <div id="scene-layer-fields" class="scene-layer-fields" hidden><label for="scene-layer">Satellite layer</label><select id="scene-layer"></select><p id="scene-layer-status" role="status"></p></div>
         <div id="layers" class="layer-options" role="group" aria-label="Analysis layer">
           <button data-layer="all" class="layer-option active" aria-pressed="true"><span class="layer-swatch all-swatch"></span>All observations<span class="layer-check">✓</span></button>
           <button data-layer="coverage" class="layer-option" aria-pressed="false"><span class="layer-swatch coverage-swatch"></span>Vegetation cover</button>
@@ -80,7 +82,7 @@
     </section>
     <section class="floating-surface observations-panel" data-resize="sw" aria-labelledby="observations-title">
       <div class="panel-heading"><h2 id="observations-title">Observations <span class="count" id="finding-count">0</span></h2><button id="export" class="icon-button" aria-label="Export findings" title="Export findings" disabled><svg class="icon"><use href="#i-download"/></svg></button><button id="observations-toggle" class="icon-button" aria-expanded="true" aria-controls="observations-content" aria-label="Collapse observations"><svg class="icon"><use href="#i-chevron"/></svg></button></div>
-      <div id="observations-content"><div id="finding-list" class="finding-list" aria-label="Survey findings"></div><div id="finding-detail" class="finding-detail" aria-live="polite"></div></div>
+      <div id="observations-content"><figure id="camera-evidence" class="camera-evidence" hidden><h3>Latest camera capture</h3><img id="camera-evidence-image" alt="Latest stationary camera module capture"><figcaption id="camera-evidence-caption"></figcaption><p>Unlocated still · no automated analysis. Separate from satellite estimates.</p></figure><div id="finding-list" class="finding-list" aria-label="Survey findings"></div><div id="finding-detail" class="finding-detail" aria-live="polite"></div></div>
     </section>
     <nav class="map-tools" aria-label="Map controls">
       <div class="view-switch floating-surface" role="group" aria-label="Map projection"><button id="view-2d" aria-pressed="false">2D</button><button id="view-3d" class="active" aria-pressed="true">3D</button></div>

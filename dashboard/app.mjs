@@ -2,11 +2,13 @@ import { survey as sample } from './sample-data.mjs';
 import { findingsForLayer, retainSelection } from './survey.mjs';
 import { createFieldMap } from './map.mjs';
 import { normaliseFeed, coordinatesFor, demoArea } from './geo.mjs';
+import { loadScene, loadSceneLayer } from './scene.mjs';
 
 const $ = selector => document.querySelector(selector);
 const survey = {name:'Cork survey area',source:null,illustrative:false,duration:0,route:[],findings:[]};
 let selected = survey.findings[0]?.id, layer = 'all', elapsed = 0, playing = false, speed = 1, previousFrame = 0;
 let socket = null, toastTimer,animationFrame=0,analysisState=null;
+let scenePackage=null,sceneRequest=0,sceneController=null,cameraEvidence=null;
 const formatTime = value => `${String(Math.floor(value/60)).padStart(2,'0')}:${String(Math.floor(value%60)).padStart(2,'0')}`;
 const escape = value => String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const map = createFieldMap($('#map'),survey,selectFinding,message=>{const notice=$('#map-notice');notice.hidden=!message;notice.textContent=message??'';},updateBasemapUi,updateAnalysisUi,inspectCell);
@@ -26,7 +28,9 @@ function renderFindings(){
   if(!findings.length)$('#finding-list').innerHTML=survey.findings.length?'<div class="empty-state"><h3>No observations in this layer</h3><p>Choose another layer to see available findings.</p></div>':'<div class="empty-state"><h3>Your field observations, here.</h3><p>Connect your camera module or an observation feed to start reviewing your survey.</p><button id="empty-connect" class="button primary">Connect a source</button></div>';
   $('#empty-connect')?.addEventListener('click',()=>toggleSetup(true));
   $('.layers-panel').hidden=!survey.findings.length;
-  $('#export').disabled=!survey.findings.length;
+  $('#export').disabled=!survey.findings.length&&!cameraEvidence;
+  $('#layers').hidden=Boolean(survey.scene);
+  $('#scene-layer-fields').hidden=!survey.scene;
   renderDetail();map.setLayer(layer);map.setSelected(selected);updateSourceLabels();
 }
 function updateBasemapUi(value){
@@ -37,9 +41,9 @@ function updateBasemapUi(value){
 }
 $('#basemap-switch').onclick=event=>{const button=event.target.closest('[data-basemap]');if(button)map.setBasemap(button.dataset.basemap);};
 function updateSourceLabels(){
-  $('#survey-context').textContent=survey.illustrative?'Sample survey · illustrative positions':survey.findings.length?`${survey.findings.length} observations · ${survey.source}`:'No survey loaded';
+  $('#survey-context').textContent=survey.scene?`${survey.findings.length} sampled pixels · ${survey.name}`:survey.illustrative?'Sample survey · illustrative positions':survey.findings.length?`${survey.findings.length} observations · ${survey.source}`:'No survey loaded';
   if(analysisState)updateAnalysisUi(analysisState);
-  $('#source-credit').textContent=survey.illustrative?'Sample observations · illustrative positions & simulated route':survey.findings.length?'Received observations · unvalidated':'Survey extent · no observations loaded';
+  $('#source-credit').textContent=survey.scene?'Satellite export · sampled preview · unvalidated':survey.illustrative?'Sample observations · illustrative positions & simulated route':survey.findings.length?'Received observations · unvalidated':'Survey extent · no observations loaded';
 }
 const formatValue=value=>Number.isFinite(value)?new Intl.NumberFormat('en-IE',{maximumFractionDigits:3}).format(value):'—';
 function updateAnalysisUi(state){
@@ -53,7 +57,7 @@ function updateAnalysisUi(state){
   $('#analysis-min').textContent=formatValue(state.min);$('#analysis-max').textContent=formatValue(state.max);
   $('#analysis-unit').textContent=state.unit||state.metric;
   $('#analysis-size-label').textContent=state.sample?'Cell diameter':'Display diameter';
-  $('#analysis-count').textContent=`${state.cells.length.toLocaleString()} ${state.sample?'sample cells':'value points'}`;
+  $('#analysis-count').textContent=`${state.cells.length.toLocaleString()} ${survey.scene?'sampled pixels':state.sample?'sample cells':'value points'}`;
   $('#legend-note').textContent=state.cells.length&&!state.fieldScale?'Zoom in to inspect the analysis layer.':state.note;
   $('#cell-previous').disabled=!hasCells;$('#cell-next').disabled=!hasCells;
   $('#analysis-height').disabled=!state.raised;
@@ -64,7 +68,7 @@ function updateAnalysisUi(state){
   }
 }
 function inspectCell(cell){
-  $('#cell-readout').textContent=cell?`${cell.sample?'Sample cell':'Received point'}: ${formatValue(cell.value)} ${cell.unit||cell.metric}`:'Hover, tap, or use arrows to inspect cells.';
+  $('#cell-readout').textContent=cell?`${survey.scene?'Satellite pixel':cell.sample?'Sample cell':'Received point'}: ${formatValue(cell.value)} ${cell.unit||cell.metric}`:'Hover, tap, or use arrows to inspect cells.';
 }
 $('#analysis-style').onclick=event=>{
   const button=event.target.closest('[data-analysis-mode]');if(!button)return;
@@ -89,7 +93,7 @@ function renderDetail(){
   const finding=survey.findings.find(item=>item.id===selected);
   const detail=$('#finding-detail');
   if(!finding){detail.hidden=true;return;}detail.hidden=false;
-  detail.innerHTML=`<div class="detail-top"><span class="evidence-label">${survey.illustrative?'Sample observation':'Received observation'}</span><span class="evidence-status ${finding.tone==='teal'?'teal':''}">${escape(finding.status)}</span></div><h3>${escape(finding.title)}</h3><p>${escape(finding.description)}</p><div class="inspection-action"><svg class="icon" aria-hidden="true"><use href="#i-pin"/></svg><div><strong>Suggested check</strong><p>${escape(finding.action)}</p></div></div>`;
+  detail.innerHTML=`<div class="detail-top"><span class="evidence-label">${survey.scene?'Satellite pixel':survey.illustrative?'Sample observation':'Received observation'}</span><span class="evidence-status ${finding.tone==='teal'?'teal':''}">${escape(finding.status)}</span></div><h3>${escape(finding.title)}</h3><p>${escape(finding.description)}</p><div class="inspection-action"><svg class="icon" aria-hidden="true"><use href="#i-pin"/></svg><div><strong>Suggested check</strong><p>${escape(finding.action)}</p></div></div>`;
 }
 function selectFinding(id){
   const finding=survey.findings.find(item=>item.id===id);if(!finding)return;
@@ -130,22 +134,57 @@ wireDisclosure('#layers-toggle','#layer-content');wireDisclosure('#observations-
 if(matchMedia('(max-width:700px), (max-height:560px)').matches){$('#layers-toggle').click();$('#observations-toggle').click();}
 function showToast(message){$('#toast').textContent=message;$('#toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').hidden=true,3200);}
 $('#export').onclick=()=>{
-  const url=URL.createObjectURL(new Blob([JSON.stringify({...survey,area:demoArea,findings:survey.findings.map(finding=>({...finding,longitude:coordinatesFor(finding)[0],latitude:coordinatesFor(finding)[1]})),note:survey.illustrative?'Illustrative sample; no AI analysis or flight.':'Received observations; results unvalidated.'},null,2)],{type:'application/json'}));
+  const url=URL.createObjectURL(new Blob([JSON.stringify({...survey,area:demoArea,cameraEvidence,findings:survey.findings.map(finding=>({...finding,longitude:coordinatesFor(finding)[0],latitude:coordinatesFor(finding)[1]})),note:survey.illustrative?'Illustrative sample; no AI analysis or flight.':survey.scene?survey.scene.note:'Received observations; results unvalidated.'},null,2)],{type:'application/json'}));
   const link=document.createElement('a');link.href=url;link.download='ithir-survey.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);showToast('Findings exported');
 };
 const setup=$('#connection-panel'),setupToggle=$('#connection-toggle');
 function toggleSetup(open){if(open&&$('#phone-panel').matches(':popover-open'))$('#phone-panel').hidePopover();setup.hidden=!open;setupToggle.setAttribute('aria-expanded',open);if(open)$('#source').focus();else setupToggle.focus();}
 $('#phone-toggle').addEventListener('click',()=>{setup.hidden=true;setupToggle.setAttribute('aria-expanded',false);});
 setupToggle.onclick=()=>toggleSetup(setup.hidden);$('.close-panel').onclick=()=>toggleSetup(false);
-$('#source').onchange=()=>{const live=$('#source').value==='live';$('#endpoint-fields').hidden=!live;$('#endpoint').disabled=!live;};
+$('#source').onchange=()=>{const live=$('#source').value==='live',scene=$('#source').value==='scene';$('#endpoint-fields').hidden=!live;$('#endpoint').disabled=!live;$('#scene-fields').hidden=!scene;$('#scene-url').disabled=!scene;};
 document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!setup.hidden)toggleSetup(false);});
 document.addEventListener('pointerdown',event=>{if(!setup.hidden&&!setup.contains(event.target)&&!setupToggle.contains(event.target))toggleSetup(false);});
 function connectionStatus(message,label,state=''){$('#connection-status').textContent=message;$('#connection-label').textContent=label;$('#connection-dot').className=`status-dot ${state}`;}
+function cancelSceneLoad(){sceneRequest++;sceneController?.abort();sceneController=null;$('#scene-layer').disabled=false;}
+function applySurvey(value){
+  Object.assign(survey,{scene:null},value);selected=survey.findings[0]?.id;playing=false;elapsed=0;layer='all';
+  $('#layers').querySelectorAll('button').forEach(button=>{const active=button.dataset.layer==='all';button.classList.toggle('active',active);button.setAttribute('aria-pressed',active);button.querySelector('.layer-check')?.remove();if(active){const check=document.createElement('span');check.className='layer-check';check.textContent='✓';button.append(check);}});
+  map.setSurvey(survey);renderFindings();updateReplay();
+}
+async function loadSatellite(loaded,name){
+  cancelSceneLoad();const request=sceneRequest;
+  // Stop the old feed now; its displayed findings stay until the scene succeeds.
+  if(socket){const previous=socket;socket=null;previous.onmessage=null;previous.onclose=null;previous.close();}
+  sceneController=new AbortController();const options={signal:sceneController.signal};
+  $('#scene-layer').disabled=true;$('#scene-layer-status').textContent='Loading satellite layer…';
+  connectionStatus('Loading satellite export… Existing observations remain until it is ready.','Loading scene');
+  try{
+    const next=loaded??await loadScene($('#scene-url').value.trim(),options);
+    const data=await loadSceneLayer(next,name??next.layers.find(item=>item.name==='ndvi')?.name??next.layers[0].name,options);
+    if(request!==sceneRequest)return;
+    scenePackage=next;applySurvey(data);
+    $('#scene-layer').replaceChildren(...next.layers.map(item=>{const option=document.createElement('option');option.value=item.name;option.textContent=`${item.name.replaceAll('_',' ')}${item.units?' · '+item.units:''}`;return option;}));
+    $('#scene-layer').value=survey.scene.layer;$('#scene-layer-status').textContent=`${survey.scene.pixel_size_m} m source grid · ${survey.scene.width} × ${survey.scene.height}. ${survey.scene.sources}`;
+    connectionStatus(`Loaded ${data.findings.length} sampled pixels. ${survey.scene.note}`,'Satellite scene','connected');
+    if(!loaded)map.fit();
+    if(!setup.hidden)toggleSetup(false);
+  }catch(error){
+    if(request!==sceneRequest||error.name==='AbortError')return;
+    $('#scene-layer').value=survey.scene?.layer??'';
+    const message=`${error.message} Existing observations retained. Check the scene address and server access.`;
+    $('#scene-layer-status').textContent=message;connectionStatus(message,'Scene load failed','failed');showToast('Satellite layer could not load. Previous data retained.');
+  }finally{if(request===sceneRequest){$('#scene-layer').disabled=false;sceneController=null;}}
+}
+$('#scene-layer').onchange=()=>{if(scenePackage)loadSatellite(scenePackage,$('#scene-layer').value);};
+window.addEventListener('phone-image',event=>{
+  cameraEvidence=event.detail;$('#camera-evidence-image').src=cameraEvidence.src;
+  $('#camera-evidence-caption').textContent=`Stationary capture · ${cameraEvidence.capturedAt?new Date(cameraEvidence.capturedAt).toLocaleString():'capture time unavailable'} · location not attached`;
+  $('#camera-evidence').hidden=false;$('#export').disabled=false;showToast('Camera still received · location not attached');
+});
 function receiveObservations(message,source){
   const findings=normaliseFeed(message);
   if(!findings.length)return false;
-  survey.findings=findings;survey.source=source;survey.illustrative=false;survey.route=[];survey.duration=0;elapsed=0;selected=findings[0].id;playing=false;
-  map.setSurvey(survey);renderFindings();updateReplay();
+  cancelSceneLoad();applySurvey({findings,source,illustrative:false,route:[],duration:0,name:'Cork survey area'});
   connectionStatus(`Received ${findings.length} observations. Results remain unvalidated.`,source==='Bluetooth camera module'?'Camera module feed':'Connected','connected');
   return true;
 }
@@ -157,18 +196,21 @@ window.addEventListener('phone-link-state',event=>{
 });
 $('#connection-form').onsubmit=event=>{
   event.preventDefault();
+  if($('#source').value==='scene'){loadSatellite();return;}
   if($('#source').value==='demo'){
+    cancelSceneLoad();
     window.dispatchEvent(new Event('phone-disconnect'));
     if(socket){socket.onclose=null;socket.close();socket=null;}
-    Object.assign(survey,structuredClone(sample));selected=survey.findings[0]?.id;playing=false;elapsed=0;map.setSurvey(survey);renderFindings();updateReplay();
+    applySurvey(structuredClone(sample));
     connectionStatus('Sample observations and simulated movement. No field measurements.','Sample survey');toggleSetup(false);showToast('Sample survey loaded');return;
   }
-  if(!$('#source').value){connectionStatus('Choose an observation feed or sample survey.','Data source');return;}
+  if(!$('#source').value){connectionStatus('Choose a satellite scene, observation feed, or sample survey.','Data source');return;}
   let address;try{address=new URL($('#endpoint').value);if(!['ws:','wss:'].includes(address.protocol))throw new Error();if(location.protocol==='https:'&&address.protocol==='ws:')throw new Error();}catch{connectionStatus('Enter a valid ws:// or wss:// address. HTTPS pages require wss://.','Data source','failed');return;}
   let current;
   try{current=new WebSocket(address.href);}catch{connectionStatus('Could not open this WebSocket address. Check the URL and browser security settings.','Connection failed','failed');return;}
   if(socket){socket.onclose=null;socket.close();}
   socket=current;
+  cancelSceneLoad();
   window.dispatchEvent(new Event('phone-disconnect'));
   connectionStatus('Opening connection…','Connecting');
   current.onopen=()=>{if(socket!==current)return;connectionStatus('Connected. Waiting for observations with latitude/longitude positions.','Connected','connected');};

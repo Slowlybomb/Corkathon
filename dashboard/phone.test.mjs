@@ -1,5 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import * as phone from './phone.mjs';
+
+test('camera still evidence validates image payload and preserves capture time without inventing location',()=>{
+  assert.equal(typeof phone.cameraImageEvidence,'function');
+  const packet={v:1,type:'image',id:'capture-1',capturedAt:1794056400000,mime:'image/jpeg',base64:'/9j/AA=='};
+  const image=phone.cameraImageEvidence(packet);
+  assert.equal(image.src,'data:image/jpeg;base64,/9j/AA==');
+  assert.equal(image.capturedAt,1794056400000);assert.equal(image.location,null);
+  assert.equal(phone.cameraImageEvidence({...packet,capturedAt:null}).capturedAt,null);
+  for(const patch of [{v:2},{type:'observations'},{mime:'text/html'},{base64:'<script>'},{base64:'/9j/'+'A'.repeat(44000)},{id:null}])assert.equal(phone.cameraImageEvidence({...packet,...patch}),null);
+});
 import { createPacketReader, createPhoneLink, SERVICE, RX, TX } from './phone.mjs';
 
 test('Bluetooth packets survive arbitrary byte boundaries, including UTF-8 and multiple messages', () => {

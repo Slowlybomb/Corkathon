@@ -108,7 +108,7 @@ export function createFieldMap(container,initialSurvey,onSelect,onStatus=()=>{},
   }
   function fit(){
     const compact=container.clientWidth<1000||container.clientHeight<560;
-    map.fitBounds(areaBounds(),{padding:compact?{top:110,bottom:130,left:25,right:25}:{top:125,bottom:160,left:290,right:335},duration:reduced?0:650,pitch:view==='3d'?52:0,bearing:view==='3d'?-12:0});
+    map.fitBounds(survey.scene?.bounds??areaBounds(),{padding:compact?{top:110,bottom:130,left:25,right:25}:{top:125,bottom:160,left:290,right:335},duration:reduced?0:650,pitch:view==='3d'?52:0,bearing:view==='3d'?-12:0});
   }
   function setBasemap(value){
     if(!['map','satellite'].includes(value))return;

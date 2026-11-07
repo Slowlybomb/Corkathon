@@ -6,7 +6,6 @@ import { normaliseFeed } from './geo.mjs';
 test('unvalued live findings never produce a synthetic analysis surface',()=>{
   const result=buildAnalysis({illustrative:false,findings:[{id:'a',latitude:51.95,longitude:-8.22}]},'all',80);
   assert.deepEqual(result.cells,[]);
-  assert.equal(result.sample,false);
 });
 
 test('live zero values survive feed adaptation and layer selection keeps value ranges separate',()=>{
@@ -35,7 +34,7 @@ test('different metrics are not silently combined into one colour scale',()=>{
 
 test('legacy illustrative flags cannot generate numeric data for unassessed observations',()=>{
   const survey={illustrative:true,findings:[{id:'old',layer:'coverage',x:500,y:450,latitude:51.95,longitude:-8.22}]};
-  assert.deepEqual(buildAnalysis(survey,'coverage',80).cells,[]);
+  assert.equal(buildAnalysis(survey,'coverage').cells.length,0);
 });
 
 test('values without geographic positions cannot appear on the map',()=>{

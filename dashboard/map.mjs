@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { loadDroneModel } from './drone-model.mjs';
-import { positionAt, findingsForLayer, routeYawAt } from './survey.mjs';
-import { demoArea, coordinatesFor, areaBounds } from './geo.mjs';
+import { findingsForLayer } from './survey.mjs';
+import { demoArea, coordinatesFor, surveyBounds } from './geo.mjs';
 import { createAnalysisOverlay } from './analysis-layer.mjs';
 import { telemetryAt, droneQuaternion } from './telemetry.mjs';
 
@@ -11,8 +11,8 @@ const feature=(geometry,properties={})=>({type:'Feature',geometry,properties});
 export function createFieldMap(container,initialSurvey,onSelect,onStatus=()=>{},onBasemapChange=()=>{},onAnalysisChange=()=>{},onCellInspect=()=>{}){
   const maplibregl=window.maplibregl;
   if(!maplibregl)throw new Error('MapLibre did not load');
-  let survey=initialSurvey,layer='all',selected=survey.findings[0]?.id,view='3d',time=0,ready=false,basemap='satellite';
-  let liveTelemetry=null,liveMode=false,located=false;
+  let survey=initialSurvey,layer='all',selected=survey.findings[0]?.id,view='3d',ready=false,basemap='satellite';
+  let liveTelemetry=null,located=false;
   const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
   const map=new maplibregl.Map({
     container,style:'https://tiles.openfreemap.org/styles/liberty',
@@ -34,13 +34,13 @@ export function createFieldMap(container,initialSurvey,onSelect,onStatus=()=>{},
   let renderer,mixer,droneAsset,modelGeneration=0,modelRequested=false,analysis,analysisError=null;
   let analysisOptions={};
   function ensureDroneModel(){
-    if(!renderer||(!survey.route.length&&!telemetryAt(liveTelemetry).location)||modelRequested)return;
+    if(!renderer||!telemetryAt(liveTelemetry).location||modelRequested)return;
     modelRequested=true;
     const generation=++modelGeneration;
     loadDroneModel().then(asset=>{
       if(generation!==modelGeneration){asset.dispose();return;}
       droneAsset=asset;mixer=asset.mixer;drone.add(asset.model);
-      mixer.setTime(liveMode||reduced?0:time);map.triggerRepaint();
+      mixer.setTime(0);map.triggerRepaint();
     }).catch(error=>{
       if(generation!==modelGeneration)return;
       console.error('Drone model could not load',error);
@@ -70,11 +70,9 @@ export function createFieldMap(container,initialSurvey,onSelect,onStatus=()=>{},
     map.getSource('findings').setData(collection(findings.map(finding=>feature({type:'Point',coordinates:coordinatesFor(finding)},{id:finding.id,number:String(survey.findings.indexOf(finding)+1).padStart(2,'0')}))));
     analysis?.setData(survey,layer);
     map.setPaintProperty('finding-points','circle-color',['case',['==',['get','id'],selected??''],'#fefee3','#2c6e49']);
-    map.getSource('survey-route').setData(collection(!liveMode&&survey.route.length>1?[feature({type:'LineString',coordinates:survey.route.map(coordinatesFor)})]:[]));
-    updateTime();
+    updateTelemetryPosition();
   }
-  function updateTime(){
-    if(liveMode){
+  function updateTelemetryPosition(){
       const current=telemetryAt(liveTelemetry),point=current.location;
       const plottable=point&&Math.abs(point.latitude)<=85;
       if(ready)map.getSource('drone-position').setData(collection(plottable?[feature({type:'Point',coordinates:[point.longitude,point.latitude]},{source:'phone-gps',accuracyM:point.accuracyM})]:[]));
@@ -86,31 +84,20 @@ export function createFieldMap(container,initialSurvey,onSelect,onStatus=()=>{},
         if(attitude)drone.quaternion.fromArray(attitude);
         if(ready&&!located){located=true;locateDrone();}
       }
-      mixer?.setTime(0);map.triggerRepaint();return;
-    }
-    const point=positionAt(survey.route,time);
-    drone.visible=Boolean(point)&&view==='3d';
-    if(ready)map.getSource('drone-position').setData(collection(point?[feature({type:'Point',coordinates:coordinatesFor(point)})]:[]));
-    if(!point){map.triggerRepaint();return;}
-    ensureDroneModel();
-    // The visual drone and 100 m height are explicitly simulated, not telemetry.
-    drone.position.copy(local(point,100));drone.visible=view==='3d';
-    const yaw=routeYawAt(survey.route,time,local);
-    drone.rotation.set(0,0,yaw??0);
-    mixer?.setTime(reduced?0:time);
-    map.triggerRepaint();
+      mixer?.setTime(0);map.triggerRepaint();
   }
   function fit(){
-    if(liveMode&&telemetryAt(liveTelemetry).location){locateDrone();return;}
+    const bounds=surveyBounds(survey);
+    if(!bounds){locateDrone();return;}
     const compact=container.clientWidth<1000||container.clientHeight<560;
-    map.fitBounds(survey.scene?.bounds??areaBounds(),{padding:compact?{top:110,bottom:130,left:25,right:25}:{top:125,bottom:160,left:290,right:335},duration:reduced?0:650,pitch:view==='3d'?52:0,bearing:view==='3d'?-12:0});
+    map.fitBounds(bounds,{maxZoom:17,padding:compact?{top:110,bottom:130,left:25,right:25}:{top:125,bottom:160,left:290,right:335},duration:reduced?0:650,pitch:view==='3d'?52:0,bearing:view==='3d'?-12:0});
   }
   function locateDrone(){
     const point=telemetryAt(liveTelemetry).location;
     if(!point||Math.abs(point.latitude)>85)return;
     map.easeTo({center:[point.longitude,point.latitude],zoom:16,duration:reduced?0:650});
   }
-  const telemetryTimer=setInterval(()=>{if(liveMode)updateTime();},1000);
+  const telemetryTimer=setInterval(()=>{if(liveTelemetry)updateTelemetryPosition();},1000);
   map.on('remove',()=>clearInterval(telemetryTimer));
   function setBasemap(value){
     if(!['map','satellite'].includes(value))return;
@@ -118,9 +105,6 @@ export function createFieldMap(container,initialSurvey,onSelect,onStatus=()=>{},
     if(ready){
       // Keep the style and shared WebGL context alive; only the raster visibility changes.
       map.setLayoutProperty('satellite-imagery','visibility',value==='satellite'?'visible':'none');
-      const lineColor=value==='satellite'?'#fefee3':'#2c6e49';
-      map.setPaintProperty('survey-extent-line','line-color',lineColor);
-      map.setPaintProperty('survey-route-line','line-color',lineColor);
     }
     onBasemapChange(value);onStatus(analysisError);
   }
@@ -138,11 +122,6 @@ export function createFieldMap(container,initialSurvey,onSelect,onStatus=()=>{},
     });
     // Added above the base style and below every survey layer, including Three.js.
     map.addLayer({id:'satellite-imagery',type:'raster',source:'satellite-imagery',layout:{visibility:'none'},paint:{'raster-fade-duration':150}});
-    const corners=[demoArea.topLeft,demoArea.topRight,demoArea.bottomRight,demoArea.bottomLeft,demoArea.topLeft].map(point=>[point.longitude,point.latitude]);
-    map.addSource('survey-extent',{type:'geojson',data:feature({type:'Polygon',coordinates:[corners]})});
-    map.addLayer({id:'survey-extent-line',type:'line',source:'survey-extent',paint:{'line-color':'#2c6e49','line-width':2,'line-dasharray':[4,3]}});
-    map.addSource('survey-route',{type:'geojson',data:collection([])});
-    map.addLayer({id:'survey-route-line',type:'line',source:'survey-route',paint:{'line-color':'#2c6e49','line-width':2,'line-dasharray':[3,3]}});
     map.addLayer(threeLayer);
     analysis=createAnalysisOverlay(map,{beforeId:'drone-3d',onChange:onAnalysisChange,onInspect:onCellInspect,onError:message=>{analysisError=message;onStatus(message);}});
     analysis?.setOptions(analysisOptions);
@@ -172,10 +151,10 @@ export function createFieldMap(container,initialSurvey,onSelect,onStatus=()=>{},
     setBasemap,
     setAnalysisOptions(options){analysisOptions={...analysisOptions,...options};analysis?.setOptions(analysisOptions);},
     inspectAnalysisCell(direction){analysis?.inspectNext(direction);},
-    setView(value){view=value;analysis?.setView(value);if(ready){map.setProjection({type:value==='3d'?'globe':'mercator'});}map.easeTo({pitch:value==='3d'?52:0,bearing:value==='3d'?-12:0,duration:reduced?0:500});updateTime();},
+    setView(value){view=value;analysis?.setView(value);if(ready){map.setProjection({type:value==='3d'?'globe':'mercator'});}map.easeTo({pitch:value==='3d'?52:0,bearing:value==='3d'?-12:0,duration:reduced?0:500});updateTelemetryPosition();},
     setLayer(value){layer=value;updateData();},setSelected(value){selected=value;if(ready)map.setPaintProperty('finding-points','circle-color',['case',['==',['get','id'],selected??''],'#fefee3','#2c6e49']);},
-    setTime(value){time=value;updateTime();},setSurvey(value){survey=value;if(value.illustrative){liveMode=false;liveTelemetry=null;}updateData();},
-    setTelemetry(value){liveMode=true;liveTelemetry=value;if(!value)located=false;if(ready)map.getSource('survey-route').setData(collection([]));updateTime();},
+    setSurvey(value){survey=value;updateData();},
+    setTelemetry(value){liveTelemetry=value;if(!value)located=false;updateTelemetryPosition();},
     locateDrone,
     zoomBy(factor){map.easeTo({zoom:map.getZoom()+Math.log2(factor),duration:reduced?0:200});},fit,
   };

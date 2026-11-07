@@ -46,7 +46,7 @@ export async function loadSceneLayer(scene,name,options={}){
       const [longitude,latitude]=utmToLngLat(m.origin_x+(col+.5)*m.pixel_size_m,m.origin_y-(row+.5)*m.pixel_size_m,m.crs);
       if(!Number.isFinite(longitude)||!Number.isFinite(latitude)||Math.abs(longitude)>180||Math.abs(latitude)>85)throw new Error('Scene pixels fall outside the supported geographic area.');
       findings.push({id:`scene-${name}-${pixel}`,title:`${metric}: ${Number(value.toPrecision(5))} ${unit}`,longitude,latitude,value,metric,unit,pixel,
-        layer:soil?'soil':name==='ndvi'?'coverage':name==='ndmi'?'moisture':'anomalies',time:0,tone:'teal',
+        layer:L.group??'observations',tone:'teal',
         status:soil?'Model estimate · unvalidated':'Satellite export · unvalidated',
         description:`${m.name??'Satellite scene'}. Pixel row ${row+1}, column ${col+1}; ${m.pixel_size_m} m grid. ${String(m.notes??'').slice(0,4000)}`,
         action:soil?'Compare this estimate with field samples before taking action.':'Review the source scene and ground conditions before taking action.'});
@@ -56,7 +56,7 @@ export async function loadSceneLayer(scene,name,options={}){
   const corners=[utmToLngLat(m.origin_x,m.origin_y,m.crs),utmToLngLat(m.origin_x+m.width*m.pixel_size_m,m.origin_y,m.crs),
     utmToLngLat(m.origin_x,m.origin_y-m.height*m.pixel_size_m,m.crs),utmToLngLat(m.origin_x+m.width*m.pixel_size_m,m.origin_y-m.height*m.pixel_size_m,m.crs)];
   const bounds=[[Math.min(...corners.map(p=>p[0])),Math.min(...corners.map(p=>p[1]))],[Math.max(...corners.map(p=>p[0])),Math.max(...corners.map(p=>p[1]))]];
-  return {name:String(m.name??'Satellite scene'),source:'Satellite scene',illustrative:false,duration:0,route:[],findings,
+  return {name:String(m.name??'Satellite scene'),source:'Satellite scene',findings,
     scene:{manifestUrl:scene.url,layer:name,depth_cm:L.depth_cm??null,crs:m.crs,pixel_size_m:m.pixel_size_m,width:m.width,height:m.height,stride,bounds,
       notes:String(m.notes??''),sources:String(m.sources??''),note}};
 }

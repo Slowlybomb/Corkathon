@@ -20,19 +20,19 @@
     <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
   </defs></svg>
   <main class="field-workspace" aria-label="Field survey workspace">
-    <div id="map" aria-label="Cork survey map"></div>
+    <div id="map" aria-label="Geographic field map"></div>
     <p id="map-notice" class="map-notice floating-surface" role="status">Loading geographic map…</p>
     <header class="toolbar floating-surface">
       <a href="./" class="brand" aria-label="Ithir home"><svg class="icon"><use href="#i-field"/></svg><span>Ithir</span></a>
       <span class="toolbar-divider"></span>
-      <div class="field-context"><h1>Cork survey area</h1><span id="survey-context">No survey loaded</span></div>
+      <div class="field-context"><h1>Field workspace</h1><span id="survey-context">No survey loaded</span></div>
       <button id="phone-toggle" class="button connection-toggle" popovertarget="phone-panel"><span class="status-dot" id="phone-dot"></span>Camera module</button>
       <button id="connection-toggle" class="button connection-toggle" aria-expanded="false" aria-controls="connection-panel"><span class="status-dot" id="connection-dot"></span><span id="connection-label">Data source</span><svg class="icon"><use href="#i-settings"/></svg></button>
     </header>
     <section id="connection-panel" class="floating-surface setup-panel" data-resize="sw" aria-labelledby="setup-title" hidden>
       <div class="panel-heading"><h2 id="setup-title">Data source</h2><button class="icon-button close-panel" aria-label="Close connection setup">×</button></div>
       <form id="connection-form">
-        <label for="source">Data source</label><select id="source"><option value="" disabled selected>Choose a source</option><option value="scene">Satellite scene package</option><option value="live">Observation feed</option><option value="demo">Sample survey · illustrative</option></select>
+        <label for="source">Data source</label><select id="source"><option value="" disabled selected>Choose a source</option><option value="scene">Satellite scene package</option><option value="live">Observation feed</option></select>
         <div id="endpoint-fields" hidden><label for="endpoint">WebSocket address</label><input id="endpoint" type="url" disabled placeholder="ws://192.168.1.10:8080" autocomplete="off"><small>Use wss:// when this page is served over HTTPS.</small></div>
         <div id="scene-fields" hidden><label for="scene-url">Scene manifest address</label><input id="scene-url" disabled placeholder="/out/cork/manifest.json" autocomplete="off"><small>Load the exported manifest and its layers from the same server, or a server that allows cross-origin access.</small></div>
         <p id="connection-status" class="connection-status" role="status">Connect a camera module over Bluetooth, or load a satellite scene or observation feed.</p>
@@ -67,17 +67,12 @@
       <div class="panel-heading"><h2 id="layer-title"><svg class="icon"><use href="#i-layers"/></svg>Field layers</h2><button id="layers-toggle" class="icon-button" aria-expanded="true" aria-controls="layer-content" aria-label="Collapse field layers"><svg class="icon"><use href="#i-chevron"/></svg></button></div>
       <div id="layer-content">
         <div id="scene-layer-fields" class="scene-layer-fields" hidden><label for="scene-layer">Satellite layer</label><select id="scene-layer"></select><p id="scene-layer-status" role="status"></p></div>
-        <div id="layers" class="layer-options" role="group" aria-label="Analysis layer">
-          <button data-layer="all" class="layer-option active" aria-pressed="true"><span class="layer-swatch all-swatch"></span>All observations<span class="layer-check">✓</span></button>
-          <button data-layer="coverage" class="layer-option" aria-pressed="false"><span class="layer-swatch coverage-swatch"></span>Vegetation cover</button>
-          <button data-layer="moisture" class="layer-option" aria-pressed="false"><span class="layer-swatch moisture-swatch"></span>Possible wet areas</button>
-          <button data-layer="anomalies" class="layer-option" aria-pressed="false"><span class="layer-swatch variation-swatch"></span>Ground variations</button>
-        </div>
+        <div id="layers" class="layer-options" role="group" aria-label="Observation layers"></div>
         <div class="analysis-controls" hidden>
           <div class="analysis-title"><span id="analysis-metric">Awaiting model values</span><span id="analysis-kind" class="analysis-badge">No data</span></div>
           <div id="analysis-style" class="view-switch analysis-style" role="group" aria-label="Analysis display"><button data-analysis-mode="surface" aria-pressed="false">Surface</button><button class="active" data-analysis-mode="columns" aria-pressed="true">Columns</button></div>
           <label class="analysis-slider" for="analysis-opacity"><span>Opacity <output id="opacity-output">76%</output></span><input id="analysis-opacity" type="range" min="10" max="100" value="76"></label>
-          <label class="analysis-slider" for="analysis-size"><span><span id="analysis-size-label">Cell diameter</span> <output id="size-output">160 m</output></span><input id="analysis-size" type="range" min="40" max="320" step="20" value="160"></label>
+          <label class="analysis-slider" for="analysis-size"><span><span id="analysis-size-label">Display diameter</span> <output id="size-output">160 m</output></span><input id="analysis-size" type="range" min="40" max="320" step="20" value="160"></label>
           <label class="analysis-slider" for="analysis-height"><span>Height scale <output id="height-output">1×</output></span><input id="analysis-height" type="range" min="25" max="300" step="25" value="100"></label>
         </div>
         <div class="legend" hidden><div class="legend-scale"></div><div class="legend-labels"><span id="analysis-min">—</span><span id="analysis-unit">No data</span><span id="analysis-max">—</span></div><p id="legend-note">Awaiting numeric model data.</p><div class="analysis-footer"><span id="analysis-count">0 cells</span><div class="cell-navigation" role="group" aria-label="Inspect analysis cells"><button id="cell-previous" class="icon-button" aria-label="Inspect previous cell">‹</button><button id="cell-next" class="icon-button" aria-label="Inspect next cell">›</button></div></div><p id="cell-readout" role="status">Hover, tap, or use arrows to inspect cells.</p></div>
@@ -91,12 +86,6 @@
       <div class="view-switch floating-surface" role="group" aria-label="Map projection"><button id="view-2d" aria-pressed="false">2D</button><button id="view-3d" class="active" aria-pressed="true">3D</button></div>
       <div class="zoom-tools floating-surface"><button id="zoom-in" class="icon-button" aria-label="Zoom in">+</button><button id="zoom-out" class="icon-button" aria-label="Zoom out">−</button><span></span><button id="fit" class="icon-button" aria-label="Fit field"><svg class="icon"><use href="#i-target"/></svg></button></div>
     </nav>
-    <section class="floating-surface replay-panel" hidden aria-label="Survey replay controls">
-      <button id="play" class="play-button" aria-label="Play survey"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 11 7-11 7z" fill="currentColor"/></svg></button>
-      <div class="replay-title"><strong>Survey replay</strong><span class="map-mode">Paused · simulated route</span></div>
-      <div class="timeline-wrap"><input id="timeline" type="range" min="0" max="150" step="0.1" value="0" aria-label="Survey replay position"><div class="timeline-labels"><time id="elapsed">00:00</time><span id="reached">0 of 6 reached</span><time id="duration">02:30</time></div></div>
-      <button id="speed" class="button speed-button" aria-label="Playback speed, 1 times">1×</button>
-    </section>
     <section id="drone-telemetry" class="floating-surface telemetry-panel" hidden aria-labelledby="drone-telemetry-title">
       <div class="telemetry-identity"><h2 id="drone-telemetry-title">Drone telemetry</h2><p id="drone-telemetry-state" role="status">Waiting for phone attitude</p></div>
       <div class="attitude-preview"><canvas aria-label="Drone attitude from phone sensors"></canvas><span id="drone-attitude-empty">Waiting for attitude</span></div>

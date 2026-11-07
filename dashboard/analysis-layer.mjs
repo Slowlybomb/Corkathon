@@ -12,7 +12,7 @@ export function createAnalysisOverlay(map,{beforeId,onChange=()=>{},onInspect=()
   function inspect(object,index){
     if(!object){onInspect(null);return;}
     selectedIndex=index;
-    onInspect({...object,metric:data.metric,unit:data.unit,sample:data.sample,min:data.min,max:data.max});
+    onInspect({...object,metric:data.metric,unit:data.unit,min:data.min,max:data.max});
   }
   function render(){
     const fieldScale=map.getZoom()>=9;
@@ -31,13 +31,13 @@ export function createAnalysisOverlay(map,{beforeId,onChange=()=>{},onInspect=()
       transitions:reduced?{}:{getElevation:220},
       onHover:info=>{
         map.getCanvas().style.cursor=info.object?'pointer':'';
-        window.dispatchEvent(new CustomEvent('analysis-hover',{detail:info.object?{x:info.x,y:info.y,value:info.object.value,metric:data.metric,unit:data.unit,sample:data.sample}:null}));
+        window.dispatchEvent(new CustomEvent('analysis-hover',{detail:info.object?{x:info.x,y:info.y,value:info.object.value,metric:data.metric,unit:data.unit}:null}));
       },
       onClick:info=>{if(info.object){inspect(info.object,info.index);render();return true;}return false;},
     })]});
     onChange({...data,fieldScale,raised,settings});
   }
-  function rebuild(){data=buildAnalysis(survey,filter,settings.radius);selectedIndex=-1;onInspect(null);window.dispatchEvent(new CustomEvent('analysis-hover',{detail:null}));render();}
+  function rebuild(){data=buildAnalysis(survey,filter);selectedIndex=-1;onInspect(null);window.dispatchEvent(new CustomEvent('analysis-hover',{detail:null}));render();}
   let fieldScale=map.getZoom()>=9;
   map.on('zoom',()=>{const next=map.getZoom()>=9;if(next!==fieldScale){fieldScale=next;render();}});
   map.on('remove',()=>{overlay.finalize();});
@@ -45,12 +45,11 @@ export function createAnalysisOverlay(map,{beforeId,onChange=()=>{},onInspect=()
     setData(value,layer){survey=value;filter=layer;rebuild();},
     setView(value){view=value;render();},
     setOptions(options){
-      const previous=settings.radius;
       settings={...settings,...options};
       settings.opacity=Math.max(.1,Math.min(1,Number(settings.opacity)||.1));
       settings.radius=Math.max(20,Math.min(160,Number(settings.radius)||80));
       settings.heightScale=Math.max(.25,Math.min(3,Number(settings.heightScale)||1));
-      if(previous!==settings.radius&&survey.illustrative)rebuild();else render();
+      render();
     },
     inspectNext(direction=1){if(!data.cells.length)return;const index=selectedIndex<0?(direction<0?data.cells.length-1:0):(selectedIndex+direction+data.cells.length)%data.cells.length;inspect(data.cells[index],index);render();},
   };

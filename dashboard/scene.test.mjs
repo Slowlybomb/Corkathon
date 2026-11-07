@@ -44,7 +44,6 @@ test('documented manifest and little-endian raster load into the shared analysis
   const loaded=await scene.loadScene(url);
   assert.deepEqual(loaded.layers.map(item=>item.name),['ndvi','ph_0-5cm']);
   const survey=await scene.loadSceneLayer(loaded,'ndvi');
-  assert.equal(survey.illustrative,false);assert.deepEqual(survey.route,[]);
   assert.equal(survey.findings.length,2);assert.equal(survey.findings[0].value,0);
   assert.deepEqual(survey.findings.map(item=>item.pixel),[0,2]);
   assert.ok(survey.findings[1].latitude<survey.findings[0].latitude,'Rows progress south');
@@ -52,7 +51,7 @@ test('documented manifest and little-endian raster load into the shared analysis
   assert.equal(survey.scene.manifestUrl,url);assert.equal(survey.scene.notes,manifest.notes);
   const analysis=buildAnalysis(survey,'all');
   assert.deepEqual(analysis.cells.map(cell=>cell.value),[0,.5]);
-  assert.equal(analysis.unit,'index');assert.equal(analysis.sample,false);
+  assert.equal(analysis.unit,'index');
   assert.match(analysis.note,/sampled pixels/i);
   const soil=await scene.loadSceneLayer(loaded,'ph_0-5cm');
   assert.match(soil.findings[0].status,/estimate/i);

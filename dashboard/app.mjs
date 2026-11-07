@@ -1,22 +1,33 @@
-import { survey as sample } from './sample-data.mjs';
 import { findingsForLayer, retainSelection } from './survey.mjs';
 import { createFieldMap } from './map.mjs';
-import { normaliseFeed, coordinatesFor, demoArea } from './geo.mjs';
+import { normaliseFeed, coordinatesFor } from './geo.mjs';
 import { loadScene, loadSceneLayer } from './scene.mjs';
 import { createDroneTelemetry } from './drone-telemetry.mjs';
 
 const $ = selector => document.querySelector(selector);
-const survey = {name:'Cork survey area',source:null,illustrative:false,duration:0,route:[],findings:[]};
-let selected = survey.findings[0]?.id, layer = 'all', elapsed = 0, playing = false, speed = 1, previousFrame = 0;
-let socket = null, toastTimer,animationFrame=0,analysisState=null;
+const survey = {name:'Field workspace',source:null,findings:[]};
+let selected, layer = 'all';
+let socket = null, toastTimer,analysisState=null;
 let scenePackage=null,sceneRequest=0,sceneController=null,cameraEvidence=null;
 let droneTelemetry=null,phoneConnected=false;
-const formatTime = value => `${String(Math.floor(value/60)).padStart(2,'0')}:${String(Math.floor(value%60)).padStart(2,'0')}`;
 const escape = value => String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const map = createFieldMap($('#map'),survey,selectFinding,message=>{const notice=$('#map-notice');notice.hidden=!message;notice.textContent=message??'';},updateBasemapUi,updateAnalysisUi,inspectCell);
 const dronePanel=createDroneTelemetry($('#drone-telemetry'));
 
+function renderLayerFilters(){
+  const layers=['all',...new Set(survey.findings.map(item=>item.layer??'observations').filter(name=>name!=='all'))];
+  if(!layers.includes(layer))layer='all';
+  $('#layers').replaceChildren(...layers.map(name=>{
+    const button=document.createElement('button'),swatch=document.createElement('span');
+    button.className=`layer-option ${name===layer?'active':''}`;button.dataset.layer=name;button.setAttribute('aria-pressed',name===layer);
+    swatch.className=`layer-swatch ${name==='all'?'all-swatch':'coverage-swatch'}`;
+    button.append(swatch,document.createTextNode(name==='all'?'All observations':name.replaceAll('_',' ')));
+    if(name===layer){const check=document.createElement('span');check.className='layer-check';check.textContent='✓';button.append(check);}
+    return button;
+  }));
+}
 function renderFindings(){
+  renderLayerFilters();
   const findings=findingsForLayer(survey.findings,layer);
   selected=retainSelection(findings,selected);
   $('#finding-count').textContent=findings.length;
@@ -25,7 +36,7 @@ function renderFindings(){
     const button=document.createElement('button');button.className=`finding-item ${finding.id===selected?'active':''}`;
     button.dataset.id=finding.id;button.setAttribute('aria-pressed',finding.id===selected);
     const number=String(survey.findings.indexOf(finding)+1).padStart(2,'0');
-    button.innerHTML=`<span class="finding-number ${finding.tone==='teal'?'teal':''}">${number}</span><span class="finding-copy"><strong>${escape(finding.title)}</strong><small>${survey.illustrative?formatTime(finding.time):escape(finding.status)}</small></span><svg class="icon" aria-hidden="true"><use href="#i-chevron"/></svg>`;
+    button.innerHTML=`<span class="finding-number ${finding.tone==='teal'?'teal':''}">${number}</span><span class="finding-copy"><strong>${escape(finding.title)}</strong><small>${escape(finding.status)}</small></span><svg class="icon" aria-hidden="true"><use href="#i-chevron"/></svg>`;
     button.onclick=()=>selectFinding(finding.id);$('#finding-list').append(button);
   });
   if(!findings.length)$('#finding-list').innerHTML=survey.findings.length?'<div class="empty-state"><h3>No observations in this layer</h3><p>Choose another layer to see available findings.</p></div>':'<div class="empty-state"><h3>Your field observations, here.</h3><p>Connect your camera module or an observation feed to start reviewing your survey.</p><button id="empty-connect" class="button primary">Connect a source</button></div>';
@@ -44,9 +55,9 @@ function updateBasemapUi(value){
 }
 $('#basemap-switch').onclick=event=>{const button=event.target.closest('[data-basemap]');if(button)map.setBasemap(button.dataset.basemap);};
 function updateSourceLabels(){
-  $('#survey-context').textContent=survey.scene?`${survey.findings.length} sampled pixels · ${survey.name}`:survey.illustrative?'Sample survey · illustrative positions':survey.findings.length?`${survey.findings.length} observations · ${survey.source}`:'No survey loaded';
+  $('#survey-context').textContent=survey.scene?`${survey.findings.length} sampled pixels · ${survey.name}`:survey.findings.length?`${survey.findings.length} observations · ${survey.source}`:'No survey loaded';
   if(analysisState)updateAnalysisUi(analysisState);
-  $('#source-credit').textContent=survey.scene?'Satellite export · sampled preview · unvalidated':survey.illustrative?'Sample observations · illustrative positions & simulated route':survey.findings.length?'Received observations · unvalidated':'Survey extent · no observations loaded';
+  $('#source-credit').textContent=survey.scene?'Satellite export · sampled preview · unvalidated':survey.findings.length?'Received observations · unvalidated':'No observations loaded';
 }
 const formatValue=value=>Number.isFinite(value)?new Intl.NumberFormat('en-IE',{maximumFractionDigits:3}).format(value):'—';
 function updateAnalysisUi(state){
@@ -56,11 +67,11 @@ function updateAnalysisUi(state){
   $('.legend').hidden=!hasCells;
   $('.legend-scale').hidden=!hasCells;
   $('#analysis-metric').textContent=state.metric;
-  $('#analysis-kind').textContent=state.sample?'Sample':'Unvalidated';
+  $('#analysis-kind').textContent='Unvalidated';
   $('#analysis-min').textContent=formatValue(state.min);$('#analysis-max').textContent=formatValue(state.max);
   $('#analysis-unit').textContent=state.unit||state.metric;
-  $('#analysis-size-label').textContent=state.sample?'Cell diameter':'Display diameter';
-  $('#analysis-count').textContent=`${state.cells.length.toLocaleString()} ${survey.scene?'sampled pixels':state.sample?'sample cells':'value points'}`;
+  $('#analysis-size-label').textContent='Display diameter';
+  $('#analysis-count').textContent=`${state.cells.length.toLocaleString()} ${survey.scene?'sampled pixels':'value points'}`;
   $('#legend-note').textContent=state.cells.length&&!state.fieldScale?'Zoom in to inspect the analysis layer.':state.note;
   $('#cell-previous').disabled=!hasCells;$('#cell-next').disabled=!hasCells;
   $('#analysis-height').disabled=!state.raised;
@@ -71,7 +82,7 @@ function updateAnalysisUi(state){
   }
 }
 function inspectCell(cell){
-  $('#cell-readout').textContent=cell?`${survey.scene?'Satellite pixel':cell.sample?'Sample cell':'Received point'}: ${formatValue(cell.value)} ${cell.unit||cell.metric}`:'Hover, tap, or use arrows to inspect cells.';
+  $('#cell-readout').textContent=cell?`${survey.scene?'Satellite pixel':'Received point'}: ${formatValue(cell.value)} ${cell.unit||cell.metric}`:'Hover, tap, or use arrows to inspect cells.';
 }
 $('#analysis-style').onclick=event=>{
   const button=event.target.closest('[data-analysis-mode]');if(!button)return;
@@ -87,7 +98,7 @@ $('#cell-previous').onclick=()=>map.inspectAnalysisCell(-1);$('#cell-next').oncl
 window.addEventListener('analysis-hover',event=>{
   const tooltip=$('#analysis-tooltip'),cell=event.detail;
   tooltip.hidden=!cell;if(!cell)return;
-  tooltip.textContent=`${cell.sample?'Sample':'Unvalidated'} · ${cell.metric}: ${formatValue(cell.value)} ${cell.unit}`;
+  tooltip.textContent=`Unvalidated · ${cell.metric}: ${formatValue(cell.value)} ${cell.unit}`;
   tooltip.style.left=`${Math.max(12,Math.min(innerWidth-tooltip.offsetWidth-12,cell.x+16))}px`;
   tooltip.style.top=`${Math.max(12,Math.min(innerHeight-tooltip.offsetHeight-12,cell.y+16))}px`;
 });
@@ -96,33 +107,16 @@ function renderDetail(){
   const finding=survey.findings.find(item=>item.id===selected);
   const detail=$('#finding-detail');
   if(!finding){detail.hidden=true;return;}detail.hidden=false;
-  detail.innerHTML=`<div class="detail-top"><span class="evidence-label">${survey.scene?'Satellite pixel':survey.illustrative?'Sample observation':'Received observation'}</span><span class="evidence-status ${finding.tone==='teal'?'teal':''}">${escape(finding.status)}</span></div><h3>${escape(finding.title)}</h3><p>${escape(finding.description)}</p><div class="inspection-action"><svg class="icon" aria-hidden="true"><use href="#i-pin"/></svg><div><strong>Suggested check</strong><p>${escape(finding.action)}</p></div></div>`;
+  detail.innerHTML=`<div class="detail-top"><span class="evidence-label">${survey.scene?'Satellite pixel':'Received observation'}</span><span class="evidence-status ${finding.tone==='teal'?'teal':''}">${escape(finding.status)}</span></div><h3>${escape(finding.title)}</h3><p>${escape(finding.description)}</p><div class="inspection-action"><svg class="icon" aria-hidden="true"><use href="#i-pin"/></svg><div><strong>Suggested check</strong><p>${escape(finding.action)}</p></div></div>`;
 }
 function selectFinding(id){
   const finding=survey.findings.find(item=>item.id===id);if(!finding)return;
-  selected=id;elapsed=survey.illustrative?finding.time:0;playing=false;
+  selected=id;
   document.querySelectorAll('.finding-item').forEach(button=>{const active=button.dataset.id===id;button.classList.toggle('active',active);button.setAttribute('aria-pressed',active);});
-  renderDetail();map.setSelected(id);updateReplay();
+  renderDetail();map.setSelected(id);
 }
-function updateReplay(){
-  map.setTime(elapsed);$('#timeline').value=elapsed;$('#elapsed').textContent=formatTime(elapsed);
-  $('.replay-panel').hidden=!survey.route.length;$('#timeline').max=survey.duration;$('#duration').textContent=formatTime(survey.duration);
-  $('#reached').textContent=`${survey.findings.filter(item=>item.time<=elapsed).length} of ${survey.findings.length} reached`;
-  const label=playing?'Pause survey':elapsed>=survey.duration?'Replay survey':'Play survey';
-  $('#play').setAttribute('aria-label',label);
-  // Keep the focused button itself stable, and only update its glyph on state changes.
-  if($('#play').dataset.playing!==String(playing)){
-    $('#play').dataset.playing=playing;
-    $('#play').innerHTML=playing?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7zM15 5h4v14h-4z" fill="currentColor"/></svg>':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 11 7-11 7z" fill="currentColor"/></svg>';
-  }
-  $('.map-mode').textContent=`${playing?'Playing':elapsed>=survey.duration?'Complete':'Paused'} · simulated route`;
-}
-$('#play').onclick=()=>{if(elapsed>=survey.duration)elapsed=0;playing=!playing;cancelAnimationFrame(animationFrame);previousFrame=0;if(playing)animationFrame=requestAnimationFrame(frame);updateReplay();};
-$('#timeline').oninput=event=>{elapsed=Number(event.target.value);playing=false;updateReplay();};
-$('#speed').onclick=()=>{speed=speed===1?2:speed===2?4:1;$('#speed').textContent=`${speed}×`;$('#speed').setAttribute('aria-label',`Playback speed, ${speed} times`);};
 $('#layers').onclick=event=>{
   const button=event.target.closest('[data-layer]');if(!button)return;layer=button.dataset.layer;
-  $('#layers').querySelectorAll('button').forEach(item=>{const active=item===button;item.classList.toggle('active',active);item.setAttribute('aria-pressed',active);item.querySelector('.layer-check')?.remove();if(active){const check=document.createElement('span');check.className='layer-check';check.textContent='✓';item.append(check);}});
   const findings=findingsForLayer(survey.findings,layer);if(!findings.some(item=>item.id===selected))selected=findings[0]?.id;
   renderFindings();
 };
@@ -137,7 +131,7 @@ wireDisclosure('#layers-toggle','#layer-content');wireDisclosure('#observations-
 if(matchMedia('(max-width:700px), (max-height:560px)').matches){$('#layers-toggle').click();$('#observations-toggle').click();}
 function showToast(message){$('#toast').textContent=message;$('#toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').hidden=true,3200);}
 $('#export').onclick=()=>{
-  const url=URL.createObjectURL(new Blob([JSON.stringify({...survey,area:demoArea,cameraEvidence,findings:survey.findings.map(finding=>({...finding,longitude:coordinatesFor(finding)[0],latitude:coordinatesFor(finding)[1]})),note:survey.illustrative?'Illustrative sample; no AI analysis or flight.':survey.scene?survey.scene.note:'Received observations; results unvalidated.'},null,2)],{type:'application/json'}));
+  const url=URL.createObjectURL(new Blob([JSON.stringify({...survey,cameraEvidence,findings:survey.findings.map(finding=>({...finding,longitude:coordinatesFor(finding)[0],latitude:coordinatesFor(finding)[1]})),note:survey.scene?.note??'Received observations; results unvalidated.'},null,2)],{type:'application/json'}));
   const link=document.createElement('a');link.href=url;link.download='ithir-survey.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);showToast('Findings exported');
 };
 const setup=$('#connection-panel'),setupToggle=$('#connection-toggle');
@@ -150,10 +144,8 @@ document.addEventListener('pointerdown',event=>{if(!setup.hidden&&!setup.contain
 function connectionStatus(message,label,state=''){$('#connection-status').textContent=message;$('#connection-label').textContent=label;$('#connection-dot').className=`status-dot ${state}`;}
 function cancelSceneLoad(){sceneRequest++;sceneController?.abort();sceneController=null;$('#scene-layer').disabled=false;}
 function applySurvey(value){
-  if(value.illustrative)dronePanel.hide();
-  Object.assign(survey,{scene:null},value);selected=survey.findings[0]?.id;playing=false;elapsed=0;layer='all';
-  $('#layers').querySelectorAll('button').forEach(button=>{const active=button.dataset.layer==='all';button.classList.toggle('active',active);button.setAttribute('aria-pressed',active);button.querySelector('.layer-check')?.remove();if(active){const check=document.createElement('span');check.className='layer-check';check.textContent='✓';button.append(check);}});
-  map.setSurvey(survey);renderFindings();updateReplay();
+  Object.assign(survey,{scene:null},value);selected=survey.findings[0]?.id;layer='all';
+  map.setSurvey(survey);renderFindings();
 }
 async function loadSatellite(loaded,name){
   cancelSceneLoad();const request=sceneRequest;
@@ -190,7 +182,7 @@ window.addEventListener('phone-locate',()=>map.locateDrone());
 function receiveObservations(message,source){
   const findings=normaliseFeed(message);
   if(!findings.length)return false;
-  cancelSceneLoad();applySurvey({findings,source,illustrative:false,route:[],duration:0,name:'Cork survey area'});
+  cancelSceneLoad();applySurvey({findings,source,name:'Field observations'});
   connectionStatus(`Received ${findings.length} observations. Results remain unvalidated.`,source==='Bluetooth camera module'?'Camera module feed':'Connected','connected');
   return true;
 }
@@ -199,20 +191,12 @@ window.addEventListener('phone-observations',event=>{
 });
 window.addEventListener('phone-link-state',event=>{
   droneTelemetry=null;if(event.detail.connected||phoneConnected){map.setTelemetry(null);dronePanel.setConnection(event.detail.connected);}phoneConnected=event.detail.connected;
-  if(event.detail.connected&&survey.illustrative)applySurvey({findings:[],route:[],duration:0,name:'Camera module',source:'Bluetooth camera module',illustrative:false});
   if(!event.detail.connected&&survey.source==='Bluetooth camera module')connectionStatus('Bluetooth disconnected. Last observations retained.','Disconnected','failed');
 });
 $('#connection-form').onsubmit=event=>{
   event.preventDefault();
   if($('#source').value==='scene'){loadSatellite();return;}
-  if($('#source').value==='demo'){
-    cancelSceneLoad();
-    window.dispatchEvent(new Event('phone-disconnect'));
-    if(socket){socket.onclose=null;socket.close();socket=null;}
-    applySurvey(structuredClone(sample));
-    connectionStatus('Sample observations and simulated movement. No field measurements.','Sample survey');toggleSetup(false);showToast('Sample survey loaded');return;
-  }
-  if(!$('#source').value){connectionStatus('Choose a satellite scene, observation feed, or sample survey.','Data source');return;}
+  if(!$('#source').value){connectionStatus('Choose a satellite scene or observation feed.','Data source');return;}
   let address;try{address=new URL($('#endpoint').value);if(!['ws:','wss:'].includes(address.protocol))throw new Error();if(location.protocol==='https:'&&address.protocol==='ws:')throw new Error();}catch{connectionStatus('Enter a valid ws:// or wss:// address. HTTPS pages require wss://.','Data source','failed');return;}
   let current;
   try{current=new WebSocket(address.href);}catch{connectionStatus('Could not open this WebSocket address. Check the URL and browser security settings.','Connection failed','failed');return;}
@@ -224,16 +208,10 @@ $('#connection-form').onsubmit=event=>{
   current.onopen=()=>{if(socket!==current)return;connectionStatus('Connected. Waiting for observations with latitude/longitude positions.','Connected','connected');};
   current.onmessage=event=>{
     if(socket!==current)return;
-    try{if(!receiveObservations(JSON.parse(event.data),'Connected WebSocket feed'))connectionStatus('Message received, but no usable geographic or sample-grid positions. Existing data retained.','Connected','connected');
+    try{if(!receiveObservations(JSON.parse(event.data),'Connected WebSocket feed'))connectionStatus('Message received, but no usable geographic positions. Existing data retained.','Connected','connected');
     }catch{connectionStatus('Message could not be read as JSON. Existing observations retained.','Connected','connected');}
   };
   current.onerror=()=>{if(socket===current)connectionStatus('Connection failed. Check the address and that the camera module or observation feed is running.','Connection failed','failed');};
   current.onclose=()=>{if(socket===current)connectionStatus('Connection closed. Last observations retained; apply the connection to reconnect.','Disconnected','failed');};
 };
-let lastDraw=0;
-function frame(now){
-  if(!playing)return;
-  if(previousFrame){elapsed=Math.min(survey.duration,elapsed+Math.min((now-previousFrame)/1000,.25)*speed);if(elapsed>=survey.duration)playing=false;if(now-lastDraw>33||!playing){updateReplay();lastDraw=now;}}
-  previousFrame=now;if(playing)animationFrame=requestAnimationFrame(frame);
-}
-renderFindings();updateReplay();
+renderFindings();

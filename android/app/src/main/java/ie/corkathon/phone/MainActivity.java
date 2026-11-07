@@ -84,7 +84,8 @@ public final class MainActivity extends Activity {
         });
         limited=new Switch(this);limited.setText("Limit link to 1 kbit/s (simulation)");limited.setTextColor(CREAM);limited.setMinHeight(dp(48));root.addView(limited);
         limited.setOnCheckedChangeListener((view,enabled)->{log(enabled?"Simulated 1 kbit/s limit enabled":"Bluetooth speed; no LoRa simulation");if(authenticated)sendStatus();});
-        text(root,"Model not connected",16,CREAM);
+        text(root,"Model on this phone: Century ARM64",16,CREAM);
+        button(root,"Open model test",()->startActivity(new android.content.Intent(this,ModelTestActivity.class)));
         test=button(root,"Send connection test",()->send(packet("log","message","Manual connection test; no model result")));test.setEnabled(false);
         LinearLayout logHeading=new LinearLayout(this);logHeading.setGravity(android.view.Gravity.CENTER_VERTICAL);root.addView(logHeading);
         TextView title=text(logHeading,"Activity log",17,CREAM);title.setLayoutParams(new LinearLayout.LayoutParams(0,dp(48),1));title.setGravity(android.view.Gravity.CENTER_VERTICAL);

@@ -472,6 +472,12 @@ pub fn unmix(pq: f32[], r: f32[], ro: u32, stride: u32, a: f32[])
     end
 end
 
+pub fn unmix_r(pq: f32[], r: f32[], ro: u32, stride: u32) -> f32[]
+    mut a = array[f32](4)
+    unmix(pq, r, ro, stride, a)
+    return a
+end
+
 pub fn ratio(a: f32, b: f32) -> f32
     return (a - b) / (a + b + f32(0.000001))
 end
@@ -513,7 +519,6 @@ pub fn load_refl(dir: u8[], date: u32, refl: f32[], ro: u32) -> bool
 end
 
 pub fn base_channels(refl: f32[], ro: u32, d: u32, norm: f32[], pq: f32[], x: f32[], xo: u32)
-    mut a = array[f32](4)
     ang = 2.0 * U.PI * f64(d) / 365.25
     sd = f32(U.sin64(ang))
     cd = f32(U.cos64(ang))
@@ -536,7 +541,7 @@ pub fn base_channels(refl: f32[], ro: u32, d: u32, norm: f32[], pq: f32[], x: f3
         x[xo + u32(12) * NPIX + p] = ratio(b3, b8)
         x[xo + u32(13) * NPIX + p] = ratio(b8a, b5)
         x[xo + u32(14) * NPIX + p] = ratio(b11 + b4, b8 + b2)
-        unmix(pq, refl, ro + p, NPIX, a)
+        a = unmix_r(pq, refl, ro + p, NPIX)
         x[xo + u32(15) * NPIX + p] = a[0]
         x[xo + u32(16) * NPIX + p] = a[1]
         x[xo + u32(17) * NPIX + p] = a[2]

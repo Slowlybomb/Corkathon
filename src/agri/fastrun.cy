@@ -120,6 +120,51 @@ pub fn main(e0m: u32, n0m: u32, nchunk: u32, chunk: u32, golden: u32) -> f64
         bi = bi + u32(1)
     end
     tread = clock() - t0
+    if golden == u32(2) then
+        mut cb = array[u8](u32(20) * A * A)
+        mut yy = u32(0)
+        while yy < A do
+            mut xx = u32(0)
+            while xx < A do
+                q10 = yy * A + xx
+                q20 = (yy / u32(2)) * A2 + xx / u32(2)
+                mut b = u32(0)
+                while b < u32(10) do
+                    mut v = f32(0.0)
+                    if b < u32(4) then
+                        v = b10[b * A * A + q10]
+                    else
+                        v = b20[(b - u32(4)) * A2 * A2 + q20]
+                    end
+                    dn = u32(max(f32(0.0), min(f32(65535.0), v)))
+                    at = ((b * A + yy) * A + xx) * u32(2)
+                    cb[at] = u8(dn & u32(255))
+                    cb[at + u32(1)] = u8(dn >> u32(8))
+                    b = b + u32(1)
+                end
+                xx = xx + u32(1)
+            end
+            yy = yy + u32(1)
+        end
+        EX.mkdir(bytes("out/phone"))
+        wc = writefile("out/phone/cork_cube.u16", cb)
+        mut js = array[u8](0)
+        TX.putstr(js, bytes("{\"width\":"))
+        TX.putint(js, u64(A))
+        TX.putstr(js, bytes(",\"height\":"))
+        TX.putint(js, u64(A))
+        TX.putstr(js, bytes(",\"margin\":"))
+        TX.putint(js, u64(mg))
+        TX.putstr(js, bytes(",\"window_px\":"))
+        TX.putint(js, u64(W))
+        TX.putstr(js, bytes(",\"window_e\":"))
+        TX.putint(js, u64(e0m))
+        TX.putstr(js, bytes(",\"window_n\":"))
+        TX.putint(js, u64(n0m))
+        TX.putstr(js, bytes(",\"pixel_m\":10,\"epsg\":32629,\"date\":\"2023-05-30\",\"doy\":150,\"scale\":10000,\"bands\":[\"B02\",\"B03\",\"B04\",\"B08\",\"B05\",\"B06\",\"B07\",\"B8A\",\"B11\",\"B12\"]}\n"))
+        wj = writefile("out/phone/cork_cube.json", js)
+        return f64(wc + wj)
+    end
     md = PR.load_model(bytes("out/model.bin"))
     df = md.df
     nw = md.nw

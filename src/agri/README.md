@@ -36,6 +36,10 @@ The Cork window is centred on 51.9500 N, 8.2201 W (UTM 29N E 553600, N 5755760),
 
 `fast.cy` computes any `n x n` chunk entirely on the GPU, in 15 `gpu do` kernels, with a 24-pixel margin, so stage-1 chunks join without seams and can be computed in any order and cached. On the RTX 4060 laptop a 288 x 288 chunk takes about 90 ms at best and 120 ms on average (0.9 Mpixel/s at best), 8 to 11 chunks per second, about ten times faster than `scene.cy`. Over the Cork window its layers match `scene.cy`. The soil layers correlate at 0.93-0.99 and the boundary score at 0.98. Crop class agrees on 92% of pixels, WRB group on 98% and field zones on 97.5%. Indices, unmixing fractions and elevation are identical. The differences come from the sliding 49 x 49 context mean replacing per-patch means. Its weather layers are the model's own, learnt from Bavarian seasons; in Ireland `scene.cy` replaces them with observed ERA5-Land values. **`INFERENCE.md` specifies every step, so the model can be ported to Java or any other language and checked against the test vectors.**
 
+**On the phone:** `phone.cy` is the entry point compiled for Android by `scripts/build_phone.ps1`. It calls `phone_core.cy`, which runs the same chunk pipeline with CPU kernels written for the arm64 back end. A 144 × 144 tile takes about 18.5 s on one core of a Snapdragon 778G, and the whole Cork scene 77 s on four cores. Its outputs are identical to the laptop engine's.
+
+The compiler's check-only mode (`century file.cy` without `--jit`) stops on `predict.cy`; running it with `--jit`, as above, works.
+
 **Recalibrating the soil heads for a new region:**
 
 ```
@@ -136,6 +140,10 @@ const zones = await layer("field_zones");
 // PlaneGeometry(m.width * m.pixel_size_m, m.height * m.pixel_size_m, m.width - 1, m.height - 1):
 // set vertex i's z to height[i], and use ph or zones as a DataTexture or vertex colours.
 ```
+
+## Tests
+
+`tests/agri/phone_core_test.cy` runs `phone_core.cy`, the phone's code path, on the laptop CPU and compares every output with the GPU chunk engine; they must match exactly. `scripts/test.ps1` runs it together with the dashboard and Android tests.
 
 ## Limits
 

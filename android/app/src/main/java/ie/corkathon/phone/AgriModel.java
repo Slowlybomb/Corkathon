@@ -14,7 +14,13 @@ public final class AgriModel {
     public static final int MARGIN = 24;
     public static final int OUTPUTS = 31;
     public static final int BANDS = 10;
-    public static final int BOUNDARY = 0, CROP = 1, WRB = 2, PH = 3, CARBON = 9, CLAY = 15, SAND = 21;
+    public static final int BOUNDARY = 0,
+            CROP = 1,
+            WRB = 2,
+            PH = 3,
+            CARBON = 9,
+            CLAY = 15,
+            SAND = 21;
     public static final int TEMPERATURE = 27, HUMIDITY = 28, SOIL_MOISTURE = 29, WATER_BALANCE = 30;
 
     private static final String LIBRARY_ERROR;
@@ -32,8 +38,16 @@ public final class AgriModel {
 
     private static native int nativeLoad(ByteBuffer image, int length, long bss);
 
-    private static native long nativeRun(int slot, ByteBuffer model, int modelLength, ByteBuffer heads, int headsLength,
-                                         ByteBuffer refl, ByteBuffer out, int size, int doy);
+    private static native long nativeRun(
+            int slot,
+            ByteBuffer model,
+            int modelLength,
+            ByteBuffer heads,
+            int headsLength,
+            ByteBuffer refl,
+            ByteBuffer out,
+            int size,
+            int doy);
 
     private final ByteBuffer model;
     private final ByteBuffer heads;
@@ -42,7 +56,13 @@ public final class AgriModel {
     public final int imageBytes;
     public final long heapBytes;
 
-    private AgriModel(ByteBuffer model, ByteBuffer heads, ArrayBlockingQueue<Integer> free, int instances, int imageBytes, long heapBytes) {
+    private AgriModel(
+            ByteBuffer model,
+            ByteBuffer heads,
+            ArrayBlockingQueue<Integer> free,
+            int instances,
+            int imageBytes,
+            long heapBytes) {
         this.model = model;
         this.heads = heads;
         this.free = free;
@@ -51,7 +71,8 @@ public final class AgriModel {
         this.heapBytes = heapBytes;
     }
 
-    public static synchronized AgriModel get(AssetManager assets, int instances) throws IOException {
+    public static synchronized AgriModel get(AssetManager assets, int instances)
+            throws IOException {
         if (shared != null) {
             return shared;
         }
@@ -59,7 +80,8 @@ public final class AgriModel {
             throw new IOException("native loader missing: " + LIBRARY_ERROR);
         }
         ByteBuffer image = asset(assets, "agri/agri_arm64.bin");
-        String info = new String(bytes(assets, "agri/agri_arm64.txt"), StandardCharsets.US_ASCII).trim();
+        String info =
+                new String(bytes(assets, "agri/agri_arm64.txt"), StandardCharsets.US_ASCII).trim();
         long bss = Long.parseLong(info.substring(info.lastIndexOf(' ') + 1));
         ArrayBlockingQueue<Integer> free = new ArrayBlockingQueue<>(Math.max(1, instances));
         for (int k = 0; k < Math.max(1, instances); k++) {
@@ -69,31 +91,51 @@ public final class AgriModel {
                     break;
                 }
                 if (rc <= -2000) {
-                    throw new IOException("this phone refused executable memory (errno " + (-2000 - rc) + ")");
+                    throw new IOException(
+                            "this phone refused executable memory (errno " + (-2000 - rc) + ")");
                 }
                 if (rc <= -1000) {
-                    throw new IOException("could not reserve memory for the model (errno " + (-1000 - rc) + ")");
+                    throw new IOException(
+                            "could not reserve memory for the model (errno " + (-1000 - rc) + ")");
                 }
                 throw new IOException("could not load the model image (" + rc + ")");
             }
             free.add(rc);
         }
-        shared = new AgriModel(asset(assets, "agri/agri.bin"), asset(assets, "agri/cork_soil_heads.bin"), free, free.size(),
-                image.capacity(), bss);
+        shared =
+                new AgriModel(
+                        asset(assets, "agri/agri.bin"),
+                        asset(assets, "agri/cork_soil_heads.bin"),
+                        free,
+                        free.size(),
+                        image.capacity(),
+                        bss);
         return shared;
     }
 
-    public Result run(ByteBuffer refl, int size, int doy, boolean irishSoilHeads) throws InterruptedException {
+    public Result run(ByteBuffer refl, int size, int doy, boolean irishSoilHeads)
+            throws InterruptedException {
         if (refl.capacity() != BANDS * size * size * 4) {
-            throw new IllegalArgumentException("refl must hold 10 bands of " + size + " x " + size + " float32 values");
+            throw new IllegalArgumentException(
+                    "refl must hold 10 bands of " + size + " x " + size + " float32 values");
         }
-        ByteBuffer out = ByteBuffer.allocateDirect(OUTPUTS * size * size * 4).order(ByteOrder.LITTLE_ENDIAN);
+        ByteBuffer out =
+                ByteBuffer.allocateDirect(OUTPUTS * size * size * 4).order(ByteOrder.LITTLE_ENDIAN);
         int slot = free.take();
         long t0 = System.nanoTime();
         long ns;
         try {
-            ns = nativeRun(slot, model, model.capacity(), irishSoilHeads ? heads : null, irishSoilHeads ? heads.capacity() : 0,
-                    refl, out, size, doy);
+            ns =
+                    nativeRun(
+                            slot,
+                            model,
+                            model.capacity(),
+                            irishSoilHeads ? heads : null,
+                            irishSoilHeads ? heads.capacity() : 0,
+                            refl,
+                            out,
+                            size,
+                            doy);
         } finally {
             free.add(slot);
         }
@@ -118,7 +160,8 @@ public final class AgriModel {
 
     private static byte[] bytes(AssetManager assets, String name) throws IOException {
         try (InputStream in = assets.open(name)) {
-            ByteArrayOutputStream all = new ByteArrayOutputStream(Math.max(in.available(), 1 << 16));
+            ByteArrayOutputStream all =
+                    new ByteArrayOutputStream(Math.max(in.available(), 1 << 16));
             byte[] buf = new byte[1 << 16];
             int n;
             while ((n = in.read(buf)) > 0) {

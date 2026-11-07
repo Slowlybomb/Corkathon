@@ -1,37 +1,37 @@
 mut PC = require("phone_core.cy")
 
-fn grab(a: u64, n: u32) -> u8[]
-    mut d = array[u8](n)
+fn copy_from_memory(address: u64, count: u32) -> u8[]
+    mut data = array[u8](count)
     mut i = u32(0)
-    while i < n do
-        d[i] = peek[u8](a + u64(i))
+    while i < count do
+        data[i] = peek[u8](address + u64(i))
         i = i + u32(1)
     end
-    return d
+    return data
 end
 
-pub fn agri_run(mp: u64, ml: u64, hp: u64, hl: u64, rp: u64, op: u64, s: u64, doy: u64) -> u64
-    d = grab(mp, u32(ml))
-    mut ov = array[u8](0)
-    if hl > u64(0) then
-        ov = grab(hp, u32(hl))
+pub fn agri_run(model_address: u64, model_length: u64, heads_address: u64, heads_length: u64, refl_address: u64, out_address: u64, size: u64, doy: u64) -> u64
+    model = copy_from_memory(model_address, u32(model_length))
+    mut regional_soil_heads = array[u8](0)
+    if heads_length > u64(0) then
+        regional_soil_heads = copy_from_memory(heads_address, u32(heads_length))
     end
-    S = u32(s)
-    P = S * S
-    n = u32(10) * P
-    mut refl = array[f32](n)
+    chunk = u32(size)
+    pixels = chunk * chunk
+    band_values = u32(10) * pixels
+    mut refl = array[f32](band_values)
     mut i = u32(0)
-    while i < n do
-        refl[i] = frombits(peek[u32](rp + u64(i) * u64(4)))
+    while i < band_values do
+        refl[i] = frombits(peek[u32](refl_address + u64(i) * u64(4)))
         i = i + u32(1)
     end
-    m = PC.NO * P
-    mut out = array[f32](m)
-    dt = PC.infer(d, ov, refl, S, u32(doy), out)
+    output_values = PC.OUTPUTS * pixels
+    mut out = array[f32](output_values)
+    seconds = PC.infer(model, regional_soil_heads, refl, chunk, u32(doy), out)
     i = u32(0)
-    while i < m do
-        poke(op + u64(i) * u64(4), tobits(out[i]))
+    while i < output_values do
+        poke(out_address + u64(i) * u64(4), tobits(out[i]))
         i = i + u32(1)
     end
-    return u64(dt * 1000000000.0)
+    return u64(seconds * 1000000000.0)
 end

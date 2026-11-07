@@ -8,8 +8,15 @@ import java.util.function.Consumer;
 final class PacketBuffer {
     private final int limit;
     private final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-    PacketBuffer(int limit) { this.limit = limit; }
-    void reset() { bytes.reset(); }
+
+    PacketBuffer(int limit) {
+        this.limit = limit;
+    }
+
+    void reset() {
+        bytes.reset();
+    }
+
     void accept(byte[] chunk, Consumer<String> receive) {
         for (byte value : chunk) {
             if (value == '\n') {
@@ -17,7 +24,10 @@ final class PacketBuffer {
                 bytes.reset();
                 if (!packet.isEmpty()) receive.accept(packet);
             } else {
-                if (bytes.size() >= limit) { reset(); throw new IllegalArgumentException("Command too large"); }
+                if (bytes.size() >= limit) {
+                    reset();
+                    throw new IllegalArgumentException("Command too large");
+                }
                 bytes.write(value);
             }
         }

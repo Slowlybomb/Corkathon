@@ -70,7 +70,14 @@ final class ResultServer {
         final int cores;
         final long at;
 
-        Survey(List<Layer> layers, int width, double originX, double originY, String device, double seconds, int cores) {
+        Survey(
+                List<Layer> layers,
+                int width,
+                double originX,
+                double originY,
+                String device,
+                double seconds,
+                int cores) {
             this.layers = layers;
             this.width = width;
             this.originX = originX;
@@ -111,9 +118,17 @@ final class ResultServer {
                 max = Math.max(max, x);
                 sum += x;
             }
-            JSONObject o = new JSONObject().put("name", l.name).put("file", "layers/" + l.name + ".f32").put("type", "float32")
-                    .put("units", l.units).put("group", l.group).put("source", l.source())
-                    .put("min", round(min)).put("max", round(max)).put("mean", round(sum / l.data.length));
+            JSONObject o =
+                    new JSONObject()
+                            .put("name", l.name)
+                            .put("file", "layers/" + l.name + ".f32")
+                            .put("type", "float32")
+                            .put("units", l.units)
+                            .put("group", l.group)
+                            .put("source", l.source())
+                            .put("min", round(min))
+                            .put("max", round(max))
+                            .put("mean", round(sum / l.data.length));
             if (l.depth != null) {
                 o.put("depth_cm", new JSONArray().put(l.depth[0]).put(l.depth[1]));
             }
@@ -121,17 +136,38 @@ final class ResultServer {
         }
         return new JSONObject()
                 .put("name", "Cork survey computed on the phone (" + s.device + ")")
-                .put("crs", "EPSG:32629").put("width", s.width).put("height", s.width).put("pixel_size_m", 10)
-                .put("origin_x", s.originX).put("origin_y", s.originY)
-                .put("layout", "row-major from the north-west corner, one value per pixel, little-endian")
+                .put("crs", "EPSG:32629")
+                .put("width", s.width)
+                .put("height", s.width)
+                .put("pixel_size_m", 10)
+                .put("origin_x", s.originX)
+                .put("origin_y", s.originY)
+                .put(
+                        "layout",
+                        "row-major from the north-west corner, one value per pixel, little-endian")
                 .put("nodata_float32", -9999)
                 .put("layers", list)
-                .put("computed", new JSONObject().put("device", s.device).put("seconds", round(s.seconds)).put("cores", s.cores).put("at", s.at))
-                .put("notes", "Soil layers and the field boundary score are computed on the phone by the Century model compiled to ARM64, from the recorded Sentinel-2 L2A scene of 30 May 2023 stored in the app. "
-                        + "Soil values are model estimates with soil heads recalibrated on Irish SoilGrids (held-out R2 pH 0.19, organic carbon 0.20), not field measurements. "
-                        + "NDVI, NDMI and NDWI are computed on the phone from the same recorded bands. "
-                        + "Weather layers are observed ERA5-Land values for the scene date (about 9 km), not model output.")
-                .put("sources", "Sentinel-2 L2A (Earth Search, AWS); ERA5-Land via Open-Meteo; model trained on Munich480 with ISRIC SoilGrids 2.0 labels");
+                .put(
+                        "computed",
+                        new JSONObject()
+                                .put("device", s.device)
+                                .put("seconds", round(s.seconds))
+                                .put("cores", s.cores)
+                                .put("at", s.at))
+                .put(
+                        "notes",
+                        "Soil layers and the field boundary score are computed on the phone by the"
+                            + " Century model compiled to ARM64, from the recorded Sentinel-2 L2A"
+                            + " scene of 30 May 2023 stored in the app. Soil values are model"
+                            + " estimates with soil heads recalibrated on Irish SoilGrids (held-out"
+                            + " R2 pH 0.19, organic carbon 0.20), not field measurements. NDVI,"
+                            + " NDMI and NDWI are computed on the phone from the same recorded"
+                            + " bands. Weather layers are observed ERA5-Land values for the scene"
+                            + " date (about 9 km), not model output.")
+                .put(
+                        "sources",
+                        "Sentinel-2 L2A (Earth Search, AWS); ERA5-Land via Open-Meteo; model"
+                            + " trained on Munich480 with ISRIC SoilGrids 2.0 labels");
     }
 
     long publish(Survey s) throws Exception {
@@ -161,11 +197,18 @@ final class ResultServer {
 
     static JSONObject header(Survey s, String id) throws Exception {
         int step = stride(s.width, s.width);
-        return manifest(s).put("v", 1).put("type", "results").put("id", id).put("sentAt", System.currentTimeMillis())
-                .put("stride", step).put("grid", (s.width + step - 1) / step).put("encoding", "f32le+deflate+base64");
+        return manifest(s)
+                .put("v", 1)
+                .put("type", "results")
+                .put("id", id)
+                .put("sentAt", System.currentTimeMillis())
+                .put("stride", step)
+                .put("grid", (s.width + step - 1) / step)
+                .put("encoding", "f32le+deflate+base64");
     }
 
-    static List<JSONObject> layerPackets(Survey s, String id, String name, int grid) throws Exception {
+    static List<JSONObject> layerPackets(Survey s, String id, String name, int grid)
+            throws Exception {
         Layer l = s.layer(name);
         if (l == null) {
             throw new IllegalArgumentException("unknown layer " + name);
@@ -205,13 +248,28 @@ final class ResultServer {
             z.write(buf, 0, d.deflate(buf));
         }
         d.end();
-        String data = android.util.Base64.encodeToString(z.toByteArray(), android.util.Base64.NO_WRAP);
+        String data =
+                android.util.Base64.encodeToString(z.toByteArray(), android.util.Base64.NO_WRAP);
         int size = 45000, parts = Math.max(1, (data.length() + size - 1) / size);
         List<JSONObject> out = new ArrayList<>();
         for (int i = 0; i < parts; i++) {
-            out.add(new JSONObject().put("v", 1).put("type", "results_layer").put("id", id).put("sentAt", System.currentTimeMillis())
-                    .put("name", name).put("grid", grid).put("min", min).put("max", max).put("encoding", "u8+deflate+base64")
-                    .put("part", i).put("parts", parts).put("data", data.substring(i * size, Math.min(data.length(), (i + 1) * size))));
+            out.add(
+                    new JSONObject()
+                            .put("v", 1)
+                            .put("type", "results_layer")
+                            .put("id", id)
+                            .put("sentAt", System.currentTimeMillis())
+                            .put("name", name)
+                            .put("grid", grid)
+                            .put("min", min)
+                            .put("max", max)
+                            .put("encoding", "u8+deflate+base64")
+                            .put("part", i)
+                            .put("parts", parts)
+                            .put(
+                                    "data",
+                                    data.substring(
+                                            i * size, Math.min(data.length(), (i + 1) * size))));
         }
         return out;
     }
@@ -291,28 +349,55 @@ final class ResultServer {
                 path = path.substring(0, q);
             }
             OutputStream out = new BufferedOutputStream(socket.getOutputStream());
-            String cors = "Access-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, OPTIONS\r\nAccess-Control-Allow-Headers: *\r\n";
+            String cors =
+                    "Access-Control-Allow-Origin: *\r\n"
+                        + "Access-Control-Allow-Methods: GET, OPTIONS\r\n"
+                        + "Access-Control-Allow-Headers: *\r\n";
             if (method.equals("OPTIONS")) {
-                out.write(("HTTP/1.1 204 No Content\r\n" + cors + "Content-Length: 0\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
+                out.write(
+                        ("HTTP/1.1 204 No Content\r\n"
+                                        + cors
+                                        + "Content-Length: 0\r\nConnection: close\r\n\r\n")
+                                .getBytes(StandardCharsets.US_ASCII));
                 out.flush();
                 return;
             }
             byte[] body = files.get(path);
             if (!method.equals("GET") || body == null) {
                 byte[] msg = "not found".getBytes(StandardCharsets.US_ASCII);
-                out.write(("HTTP/1.1 404 Not Found\r\n" + cors + "Content-Type: text/plain\r\nContent-Length: " + msg.length
-                        + "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
+                out.write(
+                        ("HTTP/1.1 404 Not Found\r\n"
+                                        + cors
+                                        + "Content-Type: text/plain\r\nContent-Length: "
+                                        + msg.length
+                                        + "\r\nConnection: close\r\n\r\n")
+                                .getBytes(StandardCharsets.US_ASCII));
                 out.write(msg);
                 out.flush();
                 return;
             }
             String type = path.endsWith(".json") ? "application/json" : "application/octet-stream";
-            out.write(("HTTP/1.1 200 OK\r\n" + cors + "Content-Type: " + type + "\r\nContent-Encoding: gzip\r\nCache-Control: no-store\r\nContent-Length: "
-                    + body.length + "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
+            out.write(
+                    ("HTTP/1.1 200 OK\r\n"
+                                    + cors
+                                    + "Content-Type: "
+                                    + type
+                                    + "\r\n"
+                                    + "Content-Encoding: gzip\r\n"
+                                    + "Cache-Control: no-store\r\n"
+                                    + "Content-Length: "
+                                    + body.length
+                                    + "\r\nConnection: close\r\n\r\n")
+                            .getBytes(StandardCharsets.US_ASCII));
             out.write(body);
             out.flush();
-            listener.log(String.format(Locale.US, "sent %s (%.0f KB compressed) to %s", path, body.length / 1024.0,
-                    socket.getInetAddress().getHostAddress()));
+            listener.log(
+                    String.format(
+                            Locale.US,
+                            "sent %s (%.0f KB compressed) to %s",
+                            path,
+                            body.length / 1024.0,
+                            socket.getInetAddress().getHostAddress()));
         } catch (IOException e) {
             if (running) {
                 listener.log("result request failed: " + e.getMessage());

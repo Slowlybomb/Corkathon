@@ -1,7 +1,7 @@
-mut dense = require("../lib/nn/dense.cy")
-mut loss = require("../lib/nn/loss.cy")
-mut optim = require("../lib/nn/optim.cy")
-mut drop = require("../lib/nn/dropout.cy")
+mut dense = require("../../lib/nn/dense.cy")
+mut loss = require("../../lib/nn/loss.cy")
+mut optim = require("../../lib/nn/optim.cy")
+mut drop = require("../../lib/nn/dropout.cy")
 
 NFEAT = u32(140)
 NH1 = u32(128)
@@ -214,7 +214,7 @@ pub fn relubw(n: u32) -> u32
     return u32(i32(abs(dh1[u32(0)])))
 end
 
-mut rng = require("../lib/rng/random.cy")
+mut rng = require("../../lib/rng/random.cy")
 
 pub fn shuf(n: u32) -> u32
     mut ntr = u32(1300)

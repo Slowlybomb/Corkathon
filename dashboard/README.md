@@ -6,6 +6,8 @@ From the repository root:
 python3 -m http.server 5173 --directory dashboard
 ```
 
+On Windows, run `python scripts/serve.py` from the repository root instead and open http://localhost:5173/dashboard/. It serves `.mjs` files as JavaScript and disables caching.
+
 Open http://localhost:5173. No installation or build step is required. Internet access and WebGL2 are required: MapLibre GL JS 5.6.2, Three.js 0.180.0, deck.gl 9.4.1, map styles/tiles, and optional fonts load from external services. A visible notice reports library or map-source loading failure.
 
 The map starts at **latitude 51.949961, longitude -8.220098**. The exact supplied corners and UTM29N references are in [DEMO_AREA.md](../docs/DEMO_AREA.md) and `geo.mjs`.
@@ -59,6 +61,23 @@ Scene names, source notes, and provenance survive JSON export. Soil values remai
 ## Camera evidence
 
 After a requested JPEG arrives over Bluetooth, its latest still and capture time also appear in **Observations**. The still remains available after disconnection and can coexist with satellite layers. Export includes it in a separate `cameraEvidence` object; it has no inferred location, map marker, analysis result, or automatic association with a satellite pixel. No camera model runs yet. Only the latest still is retained in memory; reload clears it. Follow [PHONE_LINK.md](../docs/PHONE_LINK.md) for the device setup.
+
+## Drone model panel
+
+When the phone is connected, the **Drone model** panel loads the survey computed on the phone: 32 layers covering the whole 5.76 km scene.
+
+- **Layer**: field boundaries; pH, organic carbon, clay and sand at six depths; NDVI, NDMI and NDWI; observed weather.
+- **Detail**: 60 m, 30 m or 10 m cells. A fast preview appears first and sharpens to the chosen detail. Layers are cached.
+- **Style**: heatmap on field interiors, management zones in three classes, or a 3D relief surface.
+- **Compare side by side with**: splits the screen into two synchronised maps.
+- **Data views**: thumbnails of six key layers; click one to show it.
+- A histogram, the soil depth profile, and the mean, low and high values of the layer.
+
+`phone-results.mjs` requests and decodes layers; `model-panel.mjs` renders them. The encoding is described in [ARCHITECTURE.md](../docs/ARCHITECTURE.md#bluetooth-protocol).
+
+## Drone views
+
+The telemetry bar sets the camera. **Overview** keeps the scene fixed and shows the drone with its camera frustum and ground footprint. **Follow drone** follows from behind. **Be the drone** puts the camera in the drone at 120 m. The drone turns with the phone's orientation. With a GPS fix, it moves with the phone's movement mapped onto the scene, starting at the scene centre; without one it hovers over the centre. `flight.mjs` holds this logic.
 
 ## Data and module reuse
 

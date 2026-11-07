@@ -1,4 +1,4 @@
-mut dn = require("../lib/nn/dense.cy")
+mut dn = require("../../lib/nn/dense.cy")
 
 N = u32(64)
 L = u32(4)

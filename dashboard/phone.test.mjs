@@ -2,68 +2,165 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as phone from './phone.mjs';
 
-test('camera still evidence validates image payload and preserves capture time without inventing location',()=>{
-  assert.equal(typeof phone.cameraImageEvidence,'function');
-  const packet={v:1,type:'image',id:'capture-1',capturedAt:1794056400000,mime:'image/jpeg',base64:'/9j/AA=='};
-  const image=phone.cameraImageEvidence(packet);
-  assert.equal(image.src,'data:image/jpeg;base64,/9j/AA==');
-  assert.equal(image.capturedAt,1794056400000);assert.equal(image.location,null);
-  assert.equal(phone.cameraImageEvidence({...packet,capturedAt:null}).capturedAt,null);
-  const location={latitude:51.95,longitude:-8.22,accuracyM:5,ageMs:500,capturedAt:1794056399500,mock:false};
-  assert.equal(phone.cameraImageEvidence({...packet,location}).location?.longitude,-8.22,'Image keeps its phone GPS fix');
-  assert.equal(phone.cameraImageEvidence({...packet,location:{...location,ageMs:16000}}).location,null,'Old GPS is not attached to evidence');
-  for(const patch of [{v:2},{type:'observations'},{mime:'text/html'},{base64:'<script>'},{base64:'/9j/'+'A'.repeat(44000)},{id:null}])assert.equal(phone.cameraImageEvidence({...packet,...patch}),null);
+test('camera still evidence validates image payload and preserves capture time without inventing location', () => {
+  assert.equal(typeof phone.cameraImageEvidence, 'function');
+  const packet = {
+    v: 1,
+    type: 'image',
+    id: 'capture-1',
+    capturedAt: 1794056400000,
+    mime: 'image/jpeg',
+    base64: '/9j/AA==',
+  };
+  const image = phone.cameraImageEvidence(packet);
+  assert.equal(image.src, 'data:image/jpeg;base64,/9j/AA==');
+  assert.equal(image.capturedAt, 1794056400000);
+  assert.equal(image.location, null);
+  assert.equal(phone.cameraImageEvidence({ ...packet, capturedAt: null }).capturedAt, null);
+  const location = {
+    latitude: 51.95,
+    longitude: -8.22,
+    accuracyM: 5,
+    ageMs: 500,
+    capturedAt: 1794056399500,
+    mock: false,
+  };
+  assert.equal(
+    phone.cameraImageEvidence({ ...packet, location }).location?.longitude,
+    -8.22,
+    'Image keeps its phone GPS fix',
+  );
+  assert.equal(
+    phone.cameraImageEvidence({ ...packet, location: { ...location, ageMs: 16000 } }).location,
+    null,
+    'Old GPS is not attached to evidence',
+  );
+  for (const patch of [
+    { v: 2 },
+    { type: 'observations' },
+    { mime: 'text/html' },
+    { base64: '<script>' },
+    { base64: '/9j/' + 'A'.repeat(44000) },
+    { id: null },
+  ])
+    assert.equal(phone.cameraImageEvidence({ ...packet, ...patch }), null);
 });
 import { createPacketReader, createPhoneLink, SERVICE, RX, TX } from './phone.mjs';
 
 test('Bluetooth packets survive arbitrary byte boundaries, including UTF-8 and multiple messages', () => {
-  const packets=[], errors=[];
-  const read=createPacketReader(packet=>packets.push(packet), error=>errors.push(error));
-  const data=new TextEncoder().encode('{"type":"log","message":"Cork 🌱"}\n{"type":"status","camera":"off"}\n');
-  for(const byte of data)read(Uint8Array.of(byte));
-  assert.deepEqual(packets,[{type:'log',message:'Cork 🌱'},{type:'status',camera:'off'}]);
-  assert.deepEqual(errors,[]);
+  const packets = [],
+    errors = [];
+  const read = createPacketReader(
+    packet => packets.push(packet),
+    error => errors.push(error),
+  );
+  const data = new TextEncoder().encode('{"type":"log","message":"Cork 🌱"}\n{"type":"status","camera":"off"}\n');
+  for (const byte of data) read(Uint8Array.of(byte));
+  assert.deepEqual(packets, [
+    { type: 'log', message: 'Cork 🌱' },
+    { type: 'status', camera: 'off' },
+  ]);
+  assert.deepEqual(errors, []);
 });
 
-test('packet reader reports fragmented packet transfer duration without ageing the next packet',()=>{
-  let now=100;const durations=[];
-  const read=createPacketReader((packet,duration)=>durations.push(duration),()=>{},65536,()=>now);
+test('packet reader reports fragmented packet transfer duration without ageing the next packet', () => {
+  let now = 100;
+  const durations = [];
+  const read = createPacketReader(
+    (packet, duration) => durations.push(duration),
+    () => {},
+    65536,
+    () => now,
+  );
   read(new TextEncoder().encode('{"type":'));
-  now=4100;read(new TextEncoder().encode('"telemetry"}\n{"type":"status"}\n'));
-  assert.deepEqual(durations,[4000,0]);
+  now = 4100;
+  read(new TextEncoder().encode('"telemetry"}\n{"type":"status"}\n'));
+  assert.deepEqual(durations, [4000, 0]);
 });
 
 test('malformed and oversized packets are discarded without losing the next valid packet', () => {
-  const packets=[], errors=[];
-  const read=createPacketReader(packet=>packets.push(packet), error=>errors.push(error),64);
-  read(new TextEncoder().encode('oops\n[]\n'+ 'x'.repeat(90)+'\n{"type":"ready"}\n'));
-  assert.deepEqual(packets,[{type:'ready'}]);
-  assert.equal(errors.length,3);
+  const packets = [],
+    errors = [];
+  const read = createPacketReader(
+    packet => packets.push(packet),
+    error => errors.push(error),
+    64,
+  );
+  read(new TextEncoder().encode('oops\n[]\n' + 'x'.repeat(90) + '\n{"type":"ready"}\n'));
+  assert.deepEqual(packets, [{ type: 'ready' }]);
+  assert.equal(errors.length, 3);
 });
 
 test('a real phone-link session authenticates before commands, writes bounded chunks, and resets on disconnect', async () => {
-  const notifications=new EventTarget(), device=new EventTarget(), writes=[], states=[], received=[];
-  let disconnected=0;
-  device.name='Test phone';
-  device.gatt={connected:true,disconnect(){this.connected=false;disconnected++;device.dispatchEvent(new Event('gattserverdisconnected'));},async connect(){return {async getPrimaryService(uuid){assert.equal(uuid,SERVICE);return {async getCharacteristic(uuid){
-    if(uuid===TX)return Object.assign(notifications,{async startNotifications(){return this;}});
-    assert.equal(uuid,RX);return {async writeValueWithResponse(chunk){writes.push([...chunk]);}};
-  }};}};}};
-  const link=createPhoneLink({bluetooth:{async requestDevice(){return device;}},onState:state=>states.push(state),onPacket:packet=>received.push(packet)});
-  await assert.rejects(link.send('capture'),/connect/i);
+  const notifications = new EventTarget(),
+    device = new EventTarget(),
+    writes = [],
+    states = [],
+    received = [];
+  let disconnected = 0;
+  device.name = 'Test phone';
+  device.gatt = {
+    connected: true,
+    disconnect() {
+      this.connected = false;
+      disconnected++;
+      device.dispatchEvent(new Event('gattserverdisconnected'));
+    },
+    async connect() {
+      return {
+        async getPrimaryService(uuid) {
+          assert.equal(uuid, SERVICE);
+          return {
+            async getCharacteristic(uuid) {
+              if (uuid === TX)
+                return Object.assign(notifications, {
+                  async startNotifications() {
+                    return this;
+                  },
+                });
+              assert.equal(uuid, RX);
+              return {
+                async writeValueWithResponse(chunk) {
+                  writes.push([...chunk]);
+                },
+              };
+            },
+          };
+        },
+      };
+    },
+  };
+  const link = createPhoneLink({
+    bluetooth: {
+      async requestDevice() {
+        return device;
+      },
+    },
+    onState: state => states.push(state),
+    onPacket: packet => received.push(packet),
+  });
+  await assert.rejects(link.send('capture'), /connect/i);
   await link.connect('123456');
-  assert.equal(states.at(-1),'authenticating');
-  const emit=packet=>{const event=new Event('characteristicvaluechanged');event.targetValue=new DataView(new TextEncoder().encode(JSON.stringify(packet)+'\n').buffer);Object.defineProperty(event,'target',{value:{value:event.targetValue}});notifications.dispatchEvent(event);};
-  emit({v:2,type:'ready'});
-  await assert.rejects(link.send('capture'),/connect/i);
-  emit({v:1,type:'ready',model:'not_connected'});
+  assert.equal(states.at(-1), 'authenticating');
+  const emit = packet => {
+    const event = new Event('characteristicvaluechanged');
+    event.targetValue = new DataView(new TextEncoder().encode(JSON.stringify(packet) + '\n').buffer);
+    Object.defineProperty(event, 'target', { value: { value: event.targetValue } });
+    notifications.dispatchEvent(event);
+  };
+  emit({ v: 2, type: 'ready' });
+  await assert.rejects(link.send('capture'), /connect/i);
+  emit({ v: 1, type: 'ready', model: 'not_connected' });
   await link.send('ping');
-  assert.equal(states.at(-1),'connected');
-  assert.equal(received.at(-1).type,'ready');
-  assert.ok(writes.every(chunk=>chunk.length<=20));
-  const packets=new TextDecoder().decode(Uint8Array.from(writes.flat())).trim().split('\n').map(JSON.parse);
-  assert.equal(packets[0].command,'hello');assert.equal(packets[0].pin,'123456');assert.equal(packets[1].command,'ping');
+  assert.equal(states.at(-1), 'connected');
+  assert.equal(received.at(-1).type, 'ready');
+  assert.ok(writes.every(chunk => chunk.length <= 20));
+  const packets = new TextDecoder().decode(Uint8Array.from(writes.flat())).trim().split('\n').map(JSON.parse);
+  assert.equal(packets[0].command, 'hello');
+  assert.equal(packets[0].pin, '123456');
+  assert.equal(packets[1].command, 'ping');
   link.disconnect();
-  assert.equal(disconnected,1);assert.equal(states.at(-1),'disconnected');
-  await assert.rejects(link.send('capture'),/connect/i);
+  assert.equal(disconnected, 1);
+  assert.equal(states.at(-1), 'disconnected');
+  await assert.rejects(link.send('capture'), /connect/i);
 });

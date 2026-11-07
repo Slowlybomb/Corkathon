@@ -1,14 +1,25 @@
-<<<<<<< HEAD
-*.exe
-!century/bin/century.exe
+# Build outputs and generated data
 out/
-data/*
-!data/eeg_eye.bin
-check_*.cy
-=======
+*.apk
 android/.gradle/
 android/**/build/
 android/local.properties
 *.jks
 *.keystore
->>>>>>> feat/field-dashboard
+
+# Downloaded datasets (see scripts/fetch*.ps1)
+data/
+
+# Windows executables, except the bundled Century compiler
+*.exe
+!century/bin/century.exe
+
+# Local scratch programs, screenshots and editor files
+check_*.cy
+/*.png
+/*.jpg
+screenshots/
+node_modules/
+__pycache__/
+.DS_Store
+Thumbs.db

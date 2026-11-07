@@ -20,10 +20,28 @@ import java.util.List;
 import java.util.Locale;
 
 public final class ModelTestActivity extends Activity {
-    private static final int CREAM = Color.rgb(254, 254, 227), MUTED = Color.rgb(184, 202, 181), INK = Color.rgb(16, 44, 32);
-    private static final String[] PREVIEW = {"field_boundary_score", "ph_0-5cm", "soc_gkg_0-5cm", "clay_pct_0-5cm", "sand_pct_0-5cm", "ndvi"};
-    private static final int[] PREVIEW_CHANNELS = {AgriModel.BOUNDARY, AgriModel.PH, AgriModel.CARBON, AgriModel.CLAY, AgriModel.SAND, -1};
-    private static final String[] PREVIEW_LABELS = {"field boundary score", "pH 0-5 cm", "organic carbon 0-5 cm (g/kg)", "clay 0-5 cm (%)", "sand 0-5 cm (%)", "NDVI"};
+    private static final int CREAM = Color.rgb(254, 254, 227),
+            MUTED = Color.rgb(184, 202, 181),
+            INK = Color.rgb(16, 44, 32);
+    private static final String[] PREVIEW = {
+        "field_boundary_score",
+        "ph_0-5cm",
+        "soc_gkg_0-5cm",
+        "clay_pct_0-5cm",
+        "sand_pct_0-5cm",
+        "ndvi"
+    };
+    private static final int[] PREVIEW_CHANNELS = {
+        AgriModel.BOUNDARY, AgriModel.PH, AgriModel.CARBON, AgriModel.CLAY, AgriModel.SAND, -1
+    };
+    private static final String[] PREVIEW_LABELS = {
+        "field boundary score",
+        "pH 0-5 cm",
+        "organic carbon 0-5 cm (g/kg)",
+        "clay 0-5 cm (%)",
+        "sand 0-5 cm (%)",
+        "NDVI"
+    };
 
     private TextView log;
     private ScrollView logScroll;
@@ -53,7 +71,12 @@ public final class ModelTestActivity extends Activity {
         root.setBackgroundColor(INK);
         setContentView(root);
         text(root, "Ithir Model", 24, CREAM).setTypeface(null, Typeface.BOLD);
-        text(root, "Century model compiled to ARM64, running on this phone. Input: recorded Sentinel-2 scene of the Cork demo area (30 May 2023), stored in the app.", 13, MUTED);
+        text(
+                root,
+                "Century model compiled to ARM64, running on this phone. Input: recorded Sentinel-2"
+                    + " scene of the Cork demo area (30 May 2023), stored in the app.",
+                13,
+                MUTED);
         LinearLayout row0 = new LinearLayout(this);
         root.addView(row0);
         button(row0, "Survey Cork area", () -> start(5));
@@ -79,7 +102,15 @@ public final class ModelTestActivity extends Activity {
         log.setTypeface(Typeface.MONOSPACE);
         log.setTextIsSelectable(true);
         logScroll.addView(log);
-        say("device " + Build.MANUFACTURER + " " + Build.MODEL + ", Android " + Build.VERSION.RELEASE + ", ABI " + Build.SUPPORTED_ABIS[0]);
+        say(
+                "device "
+                        + Build.MANUFACTURER
+                        + " "
+                        + Build.MODEL
+                        + ", Android "
+                        + Build.VERSION.RELEASE
+                        + ", ABI "
+                        + Build.SUPPORTED_ABIS[0]);
         if (ResultServer.latest != null) {
             surveyLayers = ResultServer.latest.layers;
             surveyTiles = ResultServer.latest.width / SurveyRunner.TILE;
@@ -120,12 +151,20 @@ public final class ModelTestActivity extends Activity {
             say("could not share results: " + e);
             return;
         }
-        StringBuilder s = new StringBuilder("Sharing over WiFi or USB. In the website choose Data source > Satellite scene package and enter:\n");
+        StringBuilder s =
+                new StringBuilder(
+                        "Sharing over WiFi or USB. In the website choose Data source > Satellite"
+                            + " scene package and enter:\n");
         for (String u : ResultServer.urls()) {
             s.append(u).append('\n');
         }
-        s.append("USB: adb forward tcp:").append(ResultServer.PORT).append(" tcp:").append(ResultServer.PORT)
-                .append(", then http://localhost:").append(ResultServer.PORT).append("/manifest.json");
+        s.append("USB: adb forward tcp:")
+                .append(ResultServer.PORT)
+                .append(" tcp:")
+                .append(ResultServer.PORT)
+                .append(", then http://localhost:")
+                .append(ResultServer.PORT)
+                .append("/manifest.json");
         shareButton.setText("Stop sharing");
         shareInfo.setText(s.toString());
         say("sharing results on port " + ResultServer.PORT);
@@ -138,25 +177,43 @@ public final class ModelTestActivity extends Activity {
         }
         busy = true;
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        new Thread(null, () -> {
-            try {
-                ensureModel();
-                if (which == 0 || which == 3) {
-                    test("check 32 px, both stages, against the laptop", "golden32", 80, false);
-                }
-                if (which == 1 || which == 3) {
-                    test("check 128 px, Irish soil heads, against the laptop", "cork128", 176, true);
-                }
-                if (which == 5 || which == 3) {
-                    survey();
-                }
-            } catch (Throwable t) {
-                say("error: " + t);
-            } finally {
-                busy = false;
-                runOnUiThread(() -> getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON));
-            }
-        }, "agri-model", 64L << 20).start();
+        new Thread(
+                        null,
+                        () -> {
+                            try {
+                                ensureModel();
+                                if (which == 0 || which == 3) {
+                                    test(
+                                            "check 32 px, both stages, against the laptop",
+                                            "golden32",
+                                            80,
+                                            false);
+                                }
+                                if (which == 1 || which == 3) {
+                                    test(
+                                            "check 128 px, Irish soil heads, against the laptop",
+                                            "cork128",
+                                            176,
+                                            true);
+                                }
+                                if (which == 5 || which == 3) {
+                                    survey();
+                                }
+                            } catch (Throwable t) {
+                                say("error: " + t);
+                            } finally {
+                                busy = false;
+                                runOnUiThread(
+                                        () ->
+                                                getWindow()
+                                                        .clearFlags(
+                                                                WindowManager.LayoutParams
+                                                                        .FLAG_KEEP_SCREEN_ON));
+                            }
+                        },
+                        "agri-model",
+                        64L << 20)
+                .start();
     }
 
     private synchronized void ensureModel() throws Exception {
@@ -165,8 +222,13 @@ public final class ModelTestActivity extends Activity {
         }
         long t0 = System.nanoTime();
         model = AgriModel.get(getAssets(), Math.min(4, Runtime.getRuntime().availableProcessors()));
-        say(String.format(Locale.US, "loaded ARM64 image (%d bytes) on %d cores and the model in %.0f ms",
-                model.imageBytes, model.instances, (System.nanoTime() - t0) / 1e6));
+        say(
+                String.format(
+                        Locale.US,
+                        "loaded ARM64 image (%d bytes) on %d cores and the model in %.0f ms",
+                        model.imageBytes,
+                        model.instances,
+                        (System.nanoTime() - t0) / 1e6));
     }
 
     private void test(String title, String name, int size, boolean irish) throws Exception {
@@ -175,7 +237,13 @@ public final class ModelTestActivity extends Activity {
         ByteBuffer refl = AgriModel.asset(getAssets(), "agri/" + name + "_in.f32");
         AgriModel.Result r = model.run(refl, size, 150, irish);
         int n = size - 2 * AgriModel.MARGIN;
-        say(String.format(Locale.US, "  %d x %d px chunk: %.2f s on one core", n, n, r.computeNanos / 1e9));
+        say(
+                String.format(
+                        Locale.US,
+                        "  %d x %d px chunk: %.2f s on one core",
+                        n,
+                        n,
+                        r.computeNanos / 1e9));
         compare(r, AgriModel.asset(getAssets(), "agri/" + name + "_expected.f32"));
         last = r;
         showMosaic = false;
@@ -185,35 +253,66 @@ public final class ModelTestActivity extends Activity {
     private void survey() throws Exception {
         say("");
         say("survey: the whole Cork area on " + model.instances + " cores");
-        ResultServer.Survey s = SurveyRunner.run(getAssets(), model, Build.MANUFACTURER + " " + Build.MODEL, new SurveyRunner.Progress() {
-            @Override
-            public void started(List<ResultServer.Layer> layers, int tiles, boolean[] done) {
-                surveyLayers = layers;
-                surveyTiles = tiles;
-                tileDone = done;
-                showMosaic = true;
-                runOnUiThread(ModelTestActivity.this::showPreview);
-            }
+        ResultServer.Survey s =
+                SurveyRunner.run(
+                        getAssets(),
+                        model,
+                        Build.MANUFACTURER + " " + Build.MODEL,
+                        new SurveyRunner.Progress() {
+                            @Override
+                            public void started(
+                                    List<ResultServer.Layer> layers, int tiles, boolean[] done) {
+                                surveyLayers = layers;
+                                surveyTiles = tiles;
+                                tileDone = done;
+                                showMosaic = true;
+                                runOnUiThread(ModelTestActivity.this::showPreview);
+                            }
 
-            @Override
-            public void tile(int done, int total, int row, int col, double seconds, int core, double elapsed) {
-                say(String.format(Locale.US, "  tile %2d/%d (row %d, col %d): %.2f s on core %d, %.1f s since start",
-                        done, total, row, col, seconds, core, elapsed));
-                runOnUiThread(ModelTestActivity.this::showPreview);
-            }
-        });
+                            @Override
+                            public void tile(
+                                    int done,
+                                    int total,
+                                    int row,
+                                    int col,
+                                    double seconds,
+                                    int core,
+                                    double elapsed) {
+                                say(
+                                        String.format(
+                                                Locale.US,
+                                                "  tile %2d/%d (row %d, col %d): %.2f s on core %d,"
+                                                    + " %.1f s since start",
+                                                done,
+                                                total,
+                                                row,
+                                                col,
+                                                seconds,
+                                                core,
+                                                elapsed));
+                                runOnUiThread(ModelTestActivity.this::showPreview);
+                            }
+                        });
         ResultServer.latest = s;
         surveyLayers = s.layers;
         long bytes = results.publish(s);
-        say(String.format(Locale.US, "survey done: %.1f s for %.1f km2; %d layers ready (%.1f MB compressed). Bluetooth sends them from the camera module screen.",
-                s.seconds, s.width * s.width * 1e-4, s.layers.size(), bytes / 1048576.0));
-        runOnUiThread(() -> {
-            shareButton.setEnabled(true);
-            showPreview();
-            if (shareAfterSurvey && !results.running()) {
-                toggleShare();
-            }
-        });
+        say(
+                String.format(
+                        Locale.US,
+                        "survey done: %.1f s for %.1f km2; %d layers ready (%.1f MB compressed)."
+                            + " Bluetooth sends them from the camera module screen.",
+                        s.seconds,
+                        s.width * s.width * 1e-4,
+                        s.layers.size(),
+                        bytes / 1048576.0));
+        runOnUiThread(
+                () -> {
+                    shareButton.setEnabled(true);
+                    showPreview();
+                    if (shareAfterSurvey && !results.running()) {
+                        toggleShare();
+                    }
+                });
     }
 
     private void compare(AgriModel.Result r, ByteBuffer expected) {
@@ -242,9 +341,20 @@ public final class ModelTestActivity extends Activity {
             }
         }
         boolean pass = boundary < 1e-3 && soil < 1e-3 && weather < 1e-3 && classes <= pixels / 100;
-        say(String.format(Locale.US, "  against the laptop: boundary %.1e, soil %.1e, weather %.1e, class differences %d of %d",
-                boundary, soil, weather, classes, 2 * pixels));
-        say(pass ? "  PASS: the phone gives the laptop's results" : "  FAIL: results differ from the laptop");
+        say(
+                String.format(
+                        Locale.US,
+                        "  against the laptop: boundary %.1e, soil %.1e, weather %.1e, class"
+                            + " differences %d of %d",
+                        boundary,
+                        soil,
+                        weather,
+                        classes,
+                        2 * pixels));
+        say(
+                pass
+                        ? "  PASS: the phone gives the laptop's results"
+                        : "  FAIL: results differ from the laptop");
     }
 
     private void nextLayer() {
@@ -261,7 +371,10 @@ public final class ModelTestActivity extends Activity {
         boolean[] valid = null;
         List<ResultServer.Layer> layers = surveyLayers;
         if (showMosaic && layers != null) {
-            n = layers.get(0).data.length == 0 ? 0 : (int) Math.round(Math.sqrt(layers.get(0).data.length));
+            n =
+                    layers.get(0).data.length == 0
+                            ? 0
+                            : (int) Math.round(Math.sqrt(layers.get(0).data.length));
             for (ResultServer.Layer l : layers) {
                 if (l.name.equals(PREVIEW[previewIndex])) {
                     v = l.data;
@@ -275,7 +388,11 @@ public final class ModelTestActivity extends Activity {
             int tiles = surveyTiles;
             valid = new boolean[n * n];
             for (int i = 0; i < n * n; i++) {
-                valid[i] = done == null || done[(i / n / SurveyRunner.TILE) * tiles + (i % n) / SurveyRunner.TILE];
+                valid[i] =
+                        done == null
+                                || done[
+                                        (i / n / SurveyRunner.TILE) * tiles
+                                                + (i % n) / SurveyRunner.TILE];
             }
         } else if (last != null && PREVIEW_CHANNELS[previewIndex] >= 0) {
             n = last.interior;
@@ -306,8 +423,16 @@ public final class ModelTestActivity extends Activity {
             px[i] = valid == null || valid[i] ? ramp((v[i] - lo) / (hi - lo)) : INK;
         }
         preview.setImageBitmap(Bitmap.createBitmap(px, n, n, Bitmap.Config.ARGB_8888));
-        legend.setText(String.format(Locale.US, "%s: %.3g (red) to %.3g (green), %d x %d pixels of 10 m. Model estimate, not a field measurement.",
-                PREVIEW_LABELS[previewIndex], lo, hi, n, n));
+        legend.setText(
+                String.format(
+                        Locale.US,
+                        "%s: %.3g (red) to %.3g (green), %d x %d pixels of 10 m. Model estimate,"
+                            + " not a field measurement.",
+                        PREVIEW_LABELS[previewIndex],
+                        lo,
+                        hi,
+                        n,
+                        n));
     }
 
     private static int ramp(float t) {
@@ -324,10 +449,11 @@ public final class ModelTestActivity extends Activity {
 
     private void say(String line) {
         android.util.Log.i("AgriModel", line);
-        runOnUiThread(() -> {
-            log.append(line + "\n");
-            logScroll.post(() -> logScroll.fullScroll(ScrollView.FOCUS_DOWN));
-        });
+        runOnUiThread(
+                () -> {
+                    log.append(line + "\n");
+                    logScroll.post(() -> logScroll.fullScroll(ScrollView.FOCUS_DOWN));
+                });
     }
 
     private TextView text(LinearLayout parent, String value, int size, int color) {

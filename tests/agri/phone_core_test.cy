@@ -1,5 +1,5 @@
-mut PC = require("phone_core.cy")
-mut TR = require("train.cy")
+mut PC = require("../../src/agri/phone_core.cy")
+mut TR = require("../../src/agri/train.cy")
 mut TX = require("../../lib/io/text.cy")
 mut BY = require("../../lib/io/bytes.cy")
 
@@ -37,9 +37,9 @@ pub fn main(S: u32, heads: u32, doy: u32) -> f64
         refl[i] = BY.f32le(ri, i * u32(4))
         i = i + u32(1)
     end
-    mut out = array[f32](PC.NO * P)
+    mut out = array[f32](PC.OUTPUTS * P)
     dt = PC.infer(d, ov, refl, S, doy, out)
-    w = put_f32s(bytes("out/golden/phone_out.f32"), out, PC.NO * P)
+    w = put_f32s(bytes("out/golden/phone_out.f32"), out, PC.OUTPUTS * P)
     mut lg = array[u8](0)
     TX.putstr(lg, bytes("phone core: S "))
     TX.putint(lg, u64(S))
@@ -48,7 +48,7 @@ pub fn main(S: u32, heads: u32, doy: u32) -> f64
     TX.putstr(lg, bytes(", chunk ms "))
     TX.putfix(lg, dt * 1000.0, u32(1))
     ex = readfile(bytes("out/golden/expected_out.f32"))
-    if heads == u32(0) and len(ex) == PC.NO * P * u32(4) then
+    if heads == u32(0) and len(ex) == PC.OUTPUTS * P * u32(4) then
         mut dsoil = 0.0
         mut dwx = 0.0
         mut dbd = 0.0
@@ -59,7 +59,7 @@ pub fn main(S: u32, heads: u32, doy: u32) -> f64
             while c < S - u32(24) do
                 sp = r * S + c
                 mut k = u32(0)
-                while k < PC.NO do
+                while k < PC.OUTPUTS do
                     a = f64(out[k * P + sp])
                     b = f64(BY.f32le(ex, (k * P + sp) * u32(4)))
                     e = max(a - b, b - a)

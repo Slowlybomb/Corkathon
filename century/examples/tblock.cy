@@ -1,6 +1,6 @@
-mut gm = require("../lib/nn/gemm.cy")
-mut at = require("../lib/nn/attention.cy")
-mut op = require("../lib/nn/ops.cy")
+mut gm = require("../../lib/nn/gemm.cy")
+mut at = require("../../lib/nn/attention.cy")
+mut op = require("../../lib/nn/ops.cy")
 
 SEQ = u32(128)
 DIM = u32(256)

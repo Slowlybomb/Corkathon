@@ -1,6 +1,6 @@
 # Ithir camera module
 
-The Android app is a small foreground camera-module prototype for the Realme RMX3363. It shows connection state, camera state, model availability, and a bounded activity log. No model runs yet. Camera module captures are stationary. Map positions require fresh phone GPS; no simulated route is available.
+The Android app is a small foreground camera-module prototype for the Realme RMX3363. It shows connection state, camera state, model availability, and a bounded activity log. It also runs the soil and field model on the phone and serves its results; see [android/README.md](../android/README.md). Camera module captures are stationary. Map positions require fresh phone GPS; no simulated route is available.
 
 The dashboard connects **directly over Bluetooth LE** using Web Bluetooth. A laptop bridge and Wi-Fi are not required for this link. Use desktop Chrome on macOS or Windows, served from `http://localhost` or HTTPS. Browser and operating-system Bluetooth permissions are required. Safari and Firefox are not supported by this prototype.
 
@@ -59,9 +59,7 @@ Telemetry packets add `type:"telemetry"`, `gpsState`, `orientationState`, and nu
 
 The camera module's optional **Limit link to 1 kbit/s (simulation)** switch paces outgoing notifications by their byte length. It includes serialized JSON and base64 overhead. This is an illustrative application-level cap, not an exact LoRa or LoRaWAN configuration. It does not emulate radio range, interference, duty cycle, energy consumption, or retransmissions. Images may take minutes; a seven-minute dashboard timeout bounds a request. Keep the switch off for the first Bluetooth connection test.
 
-## Packet handoff for the AI teammate
-
-This is a **proposed transport envelope**, ready for agreement with the model owner. It does not establish an agreed model result schema. Confirm findings, capture timestamps, locations, source evidence, failed/unavailable analysis, and delivery cadence before integrating the model.
+## Protocol
 
 | BLE item | UUID / format |
 | --- | --- |
@@ -71,23 +69,17 @@ This is a **proposed transport envelope**, ready for agreement with the model ow
 | Framing | UTF-8 JSON followed by newline; packets may span many BLE operations |
 | Limits | 1,024 bytes per incoming command; 65,536 bytes per outgoing packet; eight queued camera module packets |
 
-The dashboard writes chunks of at most 20 bytes. The camera module sends notifications serially, using negotiated MTU up to 180 payload bytes. A new connection clears partial messages and queued packets. No automatic reconnect or durable queue is included.
+The dashboard writes chunks of at most 20 bytes. The camera module sends notifications serially, using the negotiated MTU up to 180 payload bytes. A new connection clears partial messages and queued packets.
 
-Initial command:
+The dashboard first sends:
 
 ```json
 {"v":1,"type":"command","command":"hello","pin":"123456"}
 ```
 
-The camera module accepts the code and responds with `ready`, then `status`. Subsequent commands are `ping`, `capture`, and `stop_camera`, each with an `id`. Replies include `pong`, `ack`, `image`, or `error`. Status contains `camera`, `armed`, `model`, `battery` (nullable), and `simulatedBps` (nullable). All camera module envelopes contain `v:1` and `sentAt` as Unix milliseconds. Image packets add `id`, `capturedAt` in Unix milliseconds, `mime:"image/jpeg"`, and `base64`.
+The camera module accepts the code and responds with `ready`, then `status`. Further commands carry an `id`: `ping`, `capture`, `stop_camera`, `results` and `results_layer`. Replies are `pong`, `ack`, `image`, `results`, `results_layer` or `error`, carrying the request's `id`. All camera module envelopes contain `v:1` and `sentAt` in Unix milliseconds. Status contains `camera`, `armed`, `model` (`computing`, `results_ready` or `on_device`), `battery` (nullable) and `simulatedBps` (nullable). Image packets add `capturedAt`, `mime:"image/jpeg"` and `base64`.
 
-The Android activity exposes `publishObservations(JSONArray observations, long capturedAt)` as the single integration handoff. Call it with agreed results; it posts onto the app thread and sends only during an authenticated connection. It sends this envelope:
-
-```json
-{"v":1,"type":"observations","capturedAt":1794056400000,"observations":[]}
-```
-
-The dashboard reuses `normaliseFeed` for received positions and findings. Empty or malformed results preserve existing observations. Do not attach the simulated drone route as the capture location. The current adapter labels received results unvalidated; no confidence or agronomic accuracy is asserted. The app displays **Model not connected** until an actual integration updates this implementation.
+`results` returns the survey's scene geometry and its layer list. `results_layer`, with `layer` and `grid`, returns one layer as one-byte cells, deflate-compressed and base64-encoded, in one or more parts. [ARCHITECTURE.md](ARCHITECTURE.md#bluetooth-protocol) describes the encoding.
 
 ## Checks and limits
 

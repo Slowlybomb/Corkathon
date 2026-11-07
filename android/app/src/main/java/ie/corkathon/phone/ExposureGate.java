@@ -6,7 +6,8 @@ final class ExposureGate {
     private boolean claimed;
 
     boolean claim(long elapsedMillis, boolean settled) {
-        if (claimed || elapsedMillis < 500 || (!settled && elapsedMillis < MAX_WAIT_MS)) return false;
+        if (claimed || elapsedMillis < 500 || (!settled && elapsedMillis < MAX_WAIT_MS))
+            return false;
         claimed = true;
         return true;
     }

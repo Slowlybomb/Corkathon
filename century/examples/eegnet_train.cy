@@ -1,6 +1,6 @@
-mut net = require("../lib/models/eegnet.cy")
-mut data = require("../lib/data/eeg.cy")
-mut rng = require("../lib/rng/random.cy")
+mut net = require("../../lib/models/eegnet.cy")
+mut data = require("../../lib/data/eeg.cy")
+mut rng = require("../../lib/rng/random.cy")
 
 WIN = u32(128)
 STRIDE = u32(8)
@@ -96,7 +96,7 @@ pub fn run(a: u32) -> u32
     if epochs == u32(0) then
         epochs = u32(1)
     end
-    mut d = readfile("data/eeg_eye.bin")
+    mut d = readfile("century/examples/data/eeg_eye.bin")
     mut n = data.n_samples(d)
     mut ch = data.n_channels(d)
     mut ntr_s = data.n_train(d)
@@ -233,7 +233,7 @@ pub fn stage(a: u32) -> u32
     if reps == u32(0) then
         reps = u32(1)
     end
-    mut d = readfile("data/eeg_eye.bin")
+    mut d = readfile("century/examples/data/eeg_eye.bin")
     mut n = data.n_samples(d)
     mut ch = data.n_channels(d)
     mut nw = data.n_windows(n, WIN, STRIDE)

@@ -1,0 +1,4 @@
+*.exe
+!century/bin/century.exe
+out/
+data/models/

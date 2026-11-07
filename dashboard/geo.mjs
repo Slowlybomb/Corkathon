@@ -38,8 +38,10 @@ export function normaliseFeed(message){
     const point=item.position??item,geo=geographicPoint(item),x=numeric(point.x),y=numeric(point.y);
     if(!geo&&(!Number.isFinite(x)||!Number.isFinite(y)||x<0||y<0||x>1000||y>900))return [];
     const layer=['coverage','moisture','anomalies','soil'].includes(item.layer)?item.layer:'anomalies';
+    const value=numeric(item.value);
     return [{id:`feed-${index}`,title:String(item.title??item.label??'Received observation').slice(0,120),
-      ...(geo?{longitude:geo[0],latitude:geo[1]}:{x,y}),layer,time:Math.max(0,Math.min(150,numeric(item.time)||0)),tone:layer==='coverage'?'teal':'amber',
+      ...(geo?{longitude:geo[0],latitude:geo[1]}:{x,y}),
+      ...(Number.isFinite(value)?{value,metric:String(item.metric??`Model value (${layer})`).slice(0,100),unit:String(item.unit??'').slice(0,40)}:{}),layer,time:Math.max(0,Math.min(150,numeric(item.time)||0)),tone:layer==='coverage'?'teal':'amber',
       status:'Received · unvalidated',description:String(item.description??'Received from the connected feed. Review the supporting evidence.').slice(0,2000),
       action:String(item.action??'Review this observation before taking action.').slice(0,500)}];
   });

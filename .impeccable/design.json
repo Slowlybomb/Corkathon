@@ -17,7 +17,7 @@
   "narrative": {
     "northStar":"The map is the workspace",
     "overview":"A fullscreen spatial view with compact controls and summaries floating above it. Preserve the five user-approved brand colours.",
-    "keyCharacteristics":["Fullscreen map","Floating modules","No page scrolling","Flat and projected 3D views"],
+    "keyCharacteristics":["Fullscreen map","Floating modules","No page scrolling","Flat 2D and adaptive globe 3D; deck.gl analysis cells and a Three.js drone at field scale"],
     "rules":[{"name":"The map stays visible","body":"Long content scrolls inside modules; the document does not scroll.","section":"layout"}],
     "dos":["Check existing modules before creating another.","Keep sample surfaces explicitly illustrative."],
     "donts":["Do not restore the sidebar and card dashboard.","Do not invent connectivity or soil measurements."]

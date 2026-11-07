@@ -28,3 +28,13 @@ bbox west,south,east,north:
 Suggested workflow: extract parcels intersecting this envelope, inspect and transform their CRS, retain source IDs/crop/year/area attributes, and add one GeoJSON or tiled boundary layer over the satellite view. A selected parcel can then show its reported area and geometry-derived dimensions beside drone observations.
 
 The source descriptions have been verified on the web. A live bounding-box API download was attempted but could not be validated because the local client reported a certificate-verification failure. No local parcel extract is claimed to exist. The API's JSON collection description also mentions 2023 while its title and HTML description say 2024; check resource provenance before treating it as a specific year's declarations. The fiboa listing has an explicit GSAA_2024 lineage.
+
+## Selecting parcels from one holding
+
+The project owner wants a few Cork fields associated with one owner. For a defensible demo selection, search within the supplied extent for 3–6 nearby agricultural parcels sharing an anonymised holding/applicant identifier. The published 2024 table exposes `APP_HERD`, `HERD`, and `OLR` (with values including Owned, Leased In, and Rented In); older anonymised parcel datasets explicitly expose `HOLDING_ID`.
+
+Where ownership matters, restrict candidates to records declared `OLR = Owned`, and describe them as **parcels declared owned under the same anonymised holding**, rather than verified legal ownership. Do not assume adjacent parcels share an owner or join identifiers across different dataset years. Confirm grouping semantics and retain source parcel IDs, year, crop, and area when extracting.
+
+Use a neutral display label such as “Cork demo holding 01”. No real owner's name is needed. No concrete parcel cluster has been selected yet: live DAFM endpoints returned HTTP 502 during this check, so the published schema is verified but local records and shared-identifier grouping are not.
+
+Sources: [DAFM 2024 published parcel table](https://geoapi.opendata.agriculture.gov.ie/shps/collections/anonymous-lpis-data-for-2024_2024-lpis-data/items?f=html), [2022 data catalogue with HOLDING_ID](https://data.gov.ie/dataset/anonymous-lpis-data-for-2022/resource/8797641f-2f58-4f3b-a5e3-8427de8c9bea).

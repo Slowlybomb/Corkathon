@@ -50,6 +50,9 @@
         </form>
         <p id="phone-support" class="phone-note">Bluetooth LE · Chrome on localhost or HTTPS.</p>
         <dl class="phone-readings"><div><dt>Camera</dt><dd id="phone-camera">Unknown</dd></div><div><dt>Model</dt><dd id="phone-model">Not connected</dd></div><div><dt>Battery</dt><dd id="phone-battery">Unknown</dd></div><div><dt>Link</dt><dd id="phone-link-mode">Bluetooth LE</dd></div></dl>
+        <dl class="phone-readings"><div><dt>Phone GPS</dt><dd id="phone-gps">Disconnected</dd></div><div><dt>GPS altitude</dt><dd id="phone-altitude">Unavailable</dd></div><div><dt>Ground speed</dt><dd id="phone-speed">Unavailable</dd></div><div><dt>Phone heading</dt><dd id="phone-orientation">Disconnected</dd></div><div><dt>Phone tilt</dt><dd id="phone-tilt">Unavailable</dd></div></dl>
+        <p class="phone-note">Enable Share GPS and orientation on the phone. Model axes assume screen up, top edge forward. GPS altitude is not height above ground.</p>
+        <div class="phone-actions"><button id="phone-locate" class="button" type="button" disabled>Locate drone</button></div>
         <div class="phone-actions"><button id="phone-ping" class="button" disabled>Test connection</button><button id="phone-capture" class="button primary" disabled>Request image</button><button id="phone-stop" class="button" disabled>Stop camera</button></div>
         <p id="phone-request-status" class="phone-note" role="status">Capture starts only when requested and allowed on the camera module.</p>
         <figure id="phone-image-wrap" hidden><img id="phone-image" alt="Requested camera module capture"><figcaption id="phone-image-caption"></figcaption></figure>
@@ -82,7 +85,7 @@
     </section>
     <section class="floating-surface observations-panel" data-resize="sw" aria-labelledby="observations-title">
       <div class="panel-heading"><h2 id="observations-title">Observations <span class="count" id="finding-count">0</span></h2><button id="export" class="icon-button" aria-label="Export findings" title="Export findings" disabled><svg class="icon"><use href="#i-download"/></svg></button><button id="observations-toggle" class="icon-button" aria-expanded="true" aria-controls="observations-content" aria-label="Collapse observations"><svg class="icon"><use href="#i-chevron"/></svg></button></div>
-      <div id="observations-content"><figure id="camera-evidence" class="camera-evidence" hidden><h3>Latest camera capture</h3><img id="camera-evidence-image" alt="Latest stationary camera module capture"><figcaption id="camera-evidence-caption"></figcaption><p>Unlocated still · no automated analysis. Separate from satellite estimates.</p></figure><div id="finding-list" class="finding-list" aria-label="Survey findings"></div><div id="finding-detail" class="finding-detail" aria-live="polite"></div></div>
+      <div id="observations-content"><figure id="camera-evidence" class="camera-evidence" hidden><h3>Latest camera capture</h3><img id="camera-evidence-image" alt="Latest stationary camera module capture"><figcaption id="camera-evidence-caption"></figcaption><p>Camera still · no automated analysis. Separate from satellite estimates.</p></figure><div id="finding-list" class="finding-list" aria-label="Survey findings"></div><div id="finding-detail" class="finding-detail" aria-live="polite"></div></div>
     </section>
     <nav class="map-tools" aria-label="Map controls">
       <div class="view-switch floating-surface" role="group" aria-label="Map projection"><button id="view-2d" aria-pressed="false">2D</button><button id="view-3d" class="active" aria-pressed="true">3D</button></div>
@@ -93,6 +96,13 @@
       <div class="replay-title"><strong>Survey replay</strong><span class="map-mode">Paused · simulated route</span></div>
       <div class="timeline-wrap"><input id="timeline" type="range" min="0" max="150" step="0.1" value="0" aria-label="Survey replay position"><div class="timeline-labels"><time id="elapsed">00:00</time><span id="reached">0 of 6 reached</span><time id="duration">02:30</time></div></div>
       <button id="speed" class="button speed-button" aria-label="Playback speed, 1 times">1×</button>
+    </section>
+    <section id="drone-telemetry" class="floating-surface telemetry-panel" hidden aria-labelledby="drone-telemetry-title">
+      <div class="telemetry-identity"><h2 id="drone-telemetry-title">Drone telemetry</h2><p id="drone-telemetry-state" role="status">Waiting for phone attitude</p></div>
+      <div class="attitude-preview"><canvas aria-label="Drone attitude from phone sensors"></canvas><span id="drone-attitude-empty">Waiting for attitude</span></div>
+      <dl class="attitude-readings"><div><dt>Pitch</dt><dd id="drone-pitch">—</dd></div><div><dt>Roll</dt><dd id="drone-roll">—</dd></div><div><dt id="drone-heading-reference">Heading</dt><dd id="drone-heading">—</dd></div></dl>
+      <div class="telemetry-position"><span>Phone GPS</span><strong id="drone-position-reading">Waiting for phone GPS</strong><small id="drone-gps-quality">No geographic position displayed</small></div>
+      <button id="drone-locate" class="icon-button" aria-label="Locate drone on map" title="Locate drone on map" disabled><svg class="icon"><use href="#i-target"/></svg></button>
     </section>
     <footer class="map-credit"><span id="source-credit">No survey loaded</span></footer>
     <div id="analysis-tooltip" class="analysis-tooltip floating-surface" aria-hidden="true" hidden></div>

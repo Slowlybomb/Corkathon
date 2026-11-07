@@ -33,15 +33,18 @@ try{
   await c('Page.enable');await c('Runtime.enable');await c('Network.enable');
   // Only the Bluetooth radio is doubled. Packets, request matching, evidence and UI run for real.
   await c('Page.addScriptToEvaluateOnNewDocument',{source:`(${function(){
+    let library;
+    Object.defineProperty(window,'maplibregl',{configurable:true,get(){return library;},set(value){library=value;const NativeMap=value.Map;value.Map=class extends NativeMap{constructor(...args){super(...args);window.fixtureMap=this;}};}});
     const tx=new EventTarget(),device=new EventTarget();let input='';
     const emit=packet=>{const bytes=new TextEncoder().encode(JSON.stringify({v:1,...packet})+'\n');for(let i=0;i<bytes.length;i+=20){const event=new Event('characteristicvaluechanged');Object.defineProperty(event,'target',{value:{value:new DataView(bytes.slice(i,i+20).buffer)}});tx.dispatchEvent(event);}};
+    window.fixturePhoneEmit=emit;
     tx.startNotifications=async()=>tx;device.name='Fixture camera module';
     const rx={async writeValueWithResponse(bytes){input+=new TextDecoder().decode(bytes);if(!input.endsWith('\n'))return;const command=JSON.parse(input);input='';
       if(command.command==='hello')emit({type:'ready'});
-      if(command.command==='capture'){emit({type:'ack',id:command.id});const canvas=document.createElement('canvas');canvas.width=20;canvas.height=20;const context=canvas.getContext('2d');context.fillStyle='#4c956c';context.fillRect(0,0,20,20);emit({type:'image',id:command.id,capturedAt:1794056400000,mime:'image/jpeg',base64:canvas.toDataURL('image/jpeg').split(',')[1]});}
+      if(command.command==='capture'){emit({type:'ack',id:command.id});const canvas=document.createElement('canvas');canvas.width=20;canvas.height=20;const context=canvas.getContext('2d');context.fillStyle='#4c956c';context.fillRect(0,0,20,20);emit({type:'image',id:command.id,capturedAt:1794056400000,location:window.fixturePhoneLocation,mime:'image/jpeg',base64:canvas.toDataURL('image/jpeg').split(',')[1]});}
     }};
     device.gatt={connected:true,disconnect(){this.connected=false;device.dispatchEvent(new Event('gattserverdisconnected'));},async connect(){this.connected=true;return {async getPrimaryService(){return {async getCharacteristic(uuid){return uuid.startsWith('aa7a0003')?tx:rx;}};}};}};
-    Object.defineProperty(navigator,'bluetooth',{value:{async requestDevice(){return device;}}});
+    Object.defineProperty(navigator,'bluetooth',{value:{async requestDevice(){if(window.fixtureCancelPairing)throw new DOMException('Device selection cancelled','NotFoundError');return device;}}});
   }.toString()})()`});
 
   const until=async(expression,label)=>{const end=Date.now()+45000;while(Date.now()<end){if(await evaluate('Boolean('+expression+')'))return;await new Promise(r=>setTimeout(r,100));}throw new Error('Timed out: '+label);};
@@ -77,7 +80,8 @@ try{
   };
   await c('Emulation.setDeviceMetricsOverride',{width:1440,height:960,deviceScaleFactor:1,mobile:false});
   await c('Page.navigate',{url:`http://localhost:${port}/`});
-  await until(`document.querySelector('#play')?.dataset.playing && document.querySelectorAll('.panel-resize').length===4`,'app and resize controls');
+  await until(`document.querySelector('#play')?.dataset.playing && document.querySelectorAll('.panel-resize').length===4 && window.fixtureMap?.getSource('drone-position')`,'app, map sources, and resize controls');
+  await evaluate(`(async()=>{const T=await import('three'),update=T.Object3D.prototype.updateMatrixWorld;T.Object3D.prototype.updateMatrixWorld=function(force){if(this.name==='survey-drone')window.fixtureMapDrone=this;if(this.name==='phone-attitude')window.fixtureAttitudeDrone=this;return update.call(this,force);};})()`);
   assert.equal(await evaluate(`!!document.querySelector('#source option[value="scene"]')`),true,'Satellite package is a selectable source');
   assert.equal((await box('#phone-panel')).height,0,'Closed camera popover must stay hidden');
   const original=await box('.observations-panel');
@@ -101,6 +105,11 @@ try{
   resized=await box('#connection-panel');near(resized.width,before.width+70,'Source panel resizes');near(resized.height,before.height+70,'Source panel height');
   await evaluate(`document.querySelector('#source').value='demo';document.querySelector('#source').dispatchEvent(new Event('change'));document.querySelector('#connection-form').requestSubmit()`);
   await until(`document.querySelector('#finding-count').textContent==='6'`,'sample for layer controls');
+  await click('#phone-toggle');
+  await evaluate(`window.fixtureCancelPairing=true;document.querySelector('#phone-pin').value='123456';document.querySelector('#phone-form').requestSubmit()`);
+  await until(`!document.querySelector('#phone-connect').disabled`,'cancelled pairing');
+  assert.equal(await evaluate(`window.fixtureMap.getSource('survey-route')._data.features.length`),1,'Cancelled pairing preserves the sample route');
+  await evaluate(`window.fixtureCancelPairing=false;document.querySelector('#phone-panel').hidePopover()`);
   before=await box('.layers-panel');await drag('.layers-panel .panel-resize',80,100);
   resized=await box('.layers-panel');near(resized.width,before.width+80,'Layer width');near(resized.height,before.height-100,'Layer shrinks from upper edge');
   near(resized.bottom,before.bottom,'Layer bottom anchor');near(resized.left,before.left,'Layer left anchor');
@@ -133,11 +142,55 @@ try{
   await click('#phone-toggle');
   await evaluate(`document.querySelector('#phone-pin').value='123456';document.querySelector('#phone-form').requestSubmit()`);
   await until(`!document.querySelector('#phone-capture').disabled`,'camera authentication');
+  assert.equal(await evaluate(`document.querySelector('#drone-telemetry')?.hidden`),false,'Live drone telemetry is visible outside connection settings');
+  await evaluate(`window.fixtureOrientation={quaternion:[0.70710678,0,0,0.70710678],headingDeg:0,pitchDeg:0,rollDeg:0,reference:'magnetic',declinationDeg:null,accuracy:'high',capturedAt:1794056400000,ageMs:0};window.fixtureSendSensors=()=>window.fixturePhoneEmit({type:'telemetry',sentAt:Date.now(),location:window.fixturePhoneLocation??null,orientation:window.fixtureOrientation,gpsState:window.fixturePhoneLocation?'live':'searching',orientationState:'live'});window.fixtureSendSensors();window.fixtureSensorTimer=setInterval(window.fixtureSendSensors,200)`);
+  try{await until(`window.fixtureAttitudeDrone?.visible && window.fixtureAttitudeDrone.children.length>0`,'attitude model without GPS');}
+  catch(error){
+    console.error('Attitude diagnostic',await evaluate(`({state:document.querySelector('#drone-telemetry-state').textContent,canvasHidden:document.querySelector('#drone-telemetry canvas').hidden,canvasSize:document.querySelector('#drone-telemetry canvas').getBoundingClientRect().toJSON(),empty:document.querySelector('#drone-attitude-empty').textContent,model:window.fixtureAttitudeDrone?{visible:window.fixtureAttitudeDrone.visible,children:window.fixtureAttitudeDrone.children.length}:null})`));
+    console.error(events.filter(e=>e.method==='Runtime.consoleAPICalled'&&e.params.type==='error').map(e=>e.params.args.map(a=>a.value??a.description)).slice(-8));throw error;
+  }
+  assert.equal(await evaluate(`document.querySelector('#drone-pitch').textContent`),'0°');
+  assert.equal(await evaluate(`document.querySelector('#drone-roll').textContent`),'0°');
+  assert.equal(await evaluate(`window.fixtureMap.getSource('drone-position')._data.features.length`),0,'No GPS creates no geographic drone');
+  const levelUp=await evaluate(`(async()=>{const T=await import('three');return new T.Vector3(0,1,0).applyQuaternion(window.fixtureAttitudeDrone.children[0].getWorldQuaternion(new T.Quaternion())).toArray();})()`);
+  levelUp.forEach((value,i)=>assert.ok(Math.abs(value-[0,0,1][i])<1e-5,'Zero pitch/roll levels the assembled model'));
   await click('#phone-capture');
   await until(`document.querySelector('#camera-evidence') && !document.querySelector('#camera-evidence').hidden`,'camera still evidence');
   assert.equal(await evaluate(`document.querySelector('#finding-count').textContent`),'4','Unlocated capture does not replace satellite data');
   assert.match(await evaluate(`document.querySelector('#camera-evidence-caption').textContent`),/location not attached/i);
+  await evaluate(`window.fixturePhoneLocation={latitude:51.95,longitude:-8.22,accuracyM:5,altitudeM:110,capturedAt:1794056400000,ageMs:0,mock:false};window.fixtureOrientation={...window.fixtureOrientation,declinationDeg:0};window.fixtureSendSensors()`);
+  await until(`document.querySelector('#phone-gps').textContent.includes('51.950000') && window.fixtureMap?.getSource('drone-position')?._data?.features?.length===1`,'phone GPS map marker');
+  assert.deepEqual(await evaluate(`window.fixtureMap.getSource('drone-position')._data.features[0].geometry.coordinates`),[-8.22,51.95]);
+  assert.equal(await evaluate(`window.fixtureMap.getSource('drone-position')._data.features[0].properties.source`),'phone-gps');
+  assert.match(await evaluate(`document.querySelector('#phone-orientation').textContent`),/0° true/);
+  assert.equal(await evaluate(`document.querySelector('#phone-locate').disabled`),false);
+  await evaluate(`window.fixtureOrientation={...window.fixtureOrientation,headingDeg:90,pitchDeg:25,rollDeg:-15,declinationDeg:0};window.fixturePhoneLocation={...window.fixturePhoneLocation,longitude:-8.2199};window.fixtureSendSensors()`);
+  await until(`document.querySelector('#drone-pitch').textContent==='25°' && window.fixtureMapDrone?.visible && window.fixtureMapDrone.children.length>0`,'both drone models follow live attitude');
+  assert.equal(await evaluate(`document.querySelector('#drone-roll').textContent`),'-15°');
+  assert.deepEqual(await evaluate(`window.fixtureMapDrone.quaternion.toArray()`),await evaluate(`window.fixtureAttitudeDrone.quaternion.toArray()`),'Map and attitude model share the phone pose');
+  assert.deepEqual(await evaluate(`window.fixtureMap.getSource('drone-position')._data.features[0].geometry.coordinates`),[-8.2199,51.95],'Moving phone GPS moves the geographic drone');
+  const telemetryBox=await box('#drone-telemetry'),toolsBox=await box('.map-tools');
+  assert.ok(toolsBox.bottom<=telemetryBox.top,'Map controls remain above live telemetry');
+  await evaluate(`document.querySelector('#phone-panel').hidePopover()`);
+  const liveDesktop=await c('Page.captureScreenshot',{format:'png'});await writeFile(resolve(tmpdir(),'ithir-drone-live-desktop.png'),Buffer.from(liveDesktop.data,'base64'));
+  await c('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:false});
+  await new Promise(r=>setTimeout(r,150));
+  const mobileTelemetry=await box('#drone-telemetry'),mobileTools=await box('.map-tools');
+  assert.ok(mobileTools.bottom<=mobileTelemetry.top,'Mobile map controls remain above live telemetry');
+  assert.ok(mobileTelemetry.left>=12&&mobileTelemetry.right<=378&&mobileTelemetry.bottom<=832,'Telemetry stays within the mobile viewport');
+  assert.equal(await evaluate(`document.documentElement.scrollWidth===innerWidth && document.documentElement.scrollHeight===innerHeight`),true);
+  const liveMobile=await c('Page.captureScreenshot',{format:'png'});await writeFile(resolve(tmpdir(),'ithir-drone-live-mobile.png'),Buffer.from(liveMobile.data,'base64'));
+  await c('Emulation.setDeviceMetricsOverride',{width:1440,height:960,deviceScaleFactor:1,mobile:false});
+  await evaluate(`document.querySelector('#phone-panel').showPopover()`);
+  await click('#phone-locate');
+  await click('#phone-capture');
+  await until(`document.querySelector('#camera-evidence-caption').textContent.includes('phone GPS')`,'GPS attached to camera evidence');
+  assert.equal(await evaluate(`document.querySelector('#finding-count').textContent`),'4','GPS and located captures preserve satellite analysis');
+  await evaluate(`clearInterval(window.fixtureSensorTimer);window.fixturePhoneEmit({type:'telemetry',sentAt:1794056400000,location:{...window.fixturePhoneLocation,ageMs:16000},orientation:null,gpsState:'stale',orientationState:'unavailable'})`);
+  await until(`window.fixtureMap.getSource('drone-position')._data.features.length===0`,'expired GPS removes drone marker');
+  assert.equal(await evaluate(`document.querySelector('#phone-locate').disabled`),true);
   await click('#phone-disconnect');
+  assert.equal(await evaluate(`document.querySelector('#phone-gps').textContent`),'Disconnected');
   assert.equal(await evaluate(`document.querySelector('#camera-evidence').hidden`),false,'Last capture remains after disconnect');
   await click('#phone-toggle');
   const shot=await c('Page.captureScreenshot',{format:'png'});await writeFile(resolve(tmpdir(),'ithir-panels-desktop.png'),Buffer.from(shot.data,'base64'));
@@ -155,5 +208,5 @@ try{
   assert.equal(page.scrollWidth,page.width);assert.equal(page.scrollHeight,page.height);
   const mobileShot=await c('Page.captureScreenshot',{format:'png'});await writeFile(resolve(tmpdir(),'ithir-panels-mobile.png'),Buffer.from(mobileShot.data,'base64'));
   assert.deepEqual(events.filter(e=>e.method==='Runtime.exceptionThrown').map(e=>e.params.exceptionDetails.text),[]);
-  console.log('Panel and integration checks passed: resizing, viewport bounds, satellite package, layer selection, failed load retention, Bluetooth still evidence.');
+  console.log('Panel and integration checks passed: resizing, viewport bounds, satellite package, layer selection, failed load retention, Bluetooth still evidence, phone GPS map placement, sensor readings, located captures, and stale/disconnect cleanup.');
 }finally{socket?.close();chrome.kill();await new Promise(done=>server.close(done));await new Promise(done=>chrome.exitCode!==null||chrome.signalCode!==null?done():chrome.once('exit',done));await rm(profile,{recursive:true,force:true});}

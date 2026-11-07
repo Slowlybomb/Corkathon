@@ -9,6 +9,9 @@ test('camera still evidence validates image payload and preserves capture time w
   assert.equal(image.src,'data:image/jpeg;base64,/9j/AA==');
   assert.equal(image.capturedAt,1794056400000);assert.equal(image.location,null);
   assert.equal(phone.cameraImageEvidence({...packet,capturedAt:null}).capturedAt,null);
+  const location={latitude:51.95,longitude:-8.22,accuracyM:5,ageMs:500,capturedAt:1794056399500,mock:false};
+  assert.equal(phone.cameraImageEvidence({...packet,location}).location?.longitude,-8.22,'Image keeps its phone GPS fix');
+  assert.equal(phone.cameraImageEvidence({...packet,location:{...location,ageMs:16000}}).location,null,'Old GPS is not attached to evidence');
   for(const patch of [{v:2},{type:'observations'},{mime:'text/html'},{base64:'<script>'},{base64:'/9j/'+'A'.repeat(44000)},{id:null}])assert.equal(phone.cameraImageEvidence({...packet,...patch}),null);
 });
 import { createPacketReader, createPhoneLink, SERVICE, RX, TX } from './phone.mjs';
@@ -20,6 +23,14 @@ test('Bluetooth packets survive arbitrary byte boundaries, including UTF-8 and m
   for(const byte of data)read(Uint8Array.of(byte));
   assert.deepEqual(packets,[{type:'log',message:'Cork 🌱'},{type:'status',camera:'off'}]);
   assert.deepEqual(errors,[]);
+});
+
+test('packet reader reports fragmented packet transfer duration without ageing the next packet',()=>{
+  let now=100;const durations=[];
+  const read=createPacketReader((packet,duration)=>durations.push(duration),()=>{},65536,()=>now);
+  read(new TextEncoder().encode('{"type":'));
+  now=4100;read(new TextEncoder().encode('"telemetry"}\n{"type":"status"}\n'));
+  assert.deepEqual(durations,[4000,0]);
 });
 
 test('malformed and oversized packets are discarded without losing the next valid packet', () => {

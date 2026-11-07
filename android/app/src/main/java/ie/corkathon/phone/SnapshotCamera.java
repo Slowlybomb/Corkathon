@@ -11,13 +11,13 @@ import android.hardware.camera2.*;
 import android.media.Image;
 import android.media.ImageReader;
 import android.os.Handler;
+import android.os.SystemClock;
 import android.util.Size;
 import android.view.Surface;
 import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Comparator;
-import java.util.Collections;
 import java.util.function.Consumer;
 
 /** Opens the rear camera for one image. No preview or repeating capture in idle. */
@@ -27,7 +27,8 @@ final class SnapshotCamera {
     private CameraDevice camera;
     private CameraCaptureSession session;
     private ImageReader reader;
-    private Runnable timeout;
+    private ImageReader meteringReader;
+    private Runnable timeout, meteringTimeout;
     private int generation;
     boolean active;
 
@@ -36,9 +37,11 @@ final class SnapshotCamera {
     void stop() {
         generation++;
         if (timeout != null) handler.removeCallbacks(timeout);
+        if (meteringTimeout != null) handler.removeCallbacks(meteringTimeout);
         if (session != null) { session.close(); session = null; }
         if (camera != null) { camera.close(); camera = null; }
         if (reader != null) { reader.close(); reader = null; }
+        if (meteringReader != null) { meteringReader.close(); meteringReader = null; }
         active = false;
     }
 
@@ -63,11 +66,23 @@ final class SnapshotCamera {
             Size[] sizes = info.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP).getOutputSizes(ImageFormat.JPEG);
             // ponytail: smallest camera JPEG, capped to 320px after capture; no continuous preview.
             Size size = Arrays.stream(sizes).min(Comparator.comparingLong(s -> (long)s.getWidth() * s.getHeight())).orElseThrow();
+            Size meteringSize = Arrays.stream(info.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP).getOutputSizes(ImageFormat.YUV_420_888))
+                .min(Comparator.comparingLong(s -> (long)s.getWidth() * s.getHeight())).orElseThrow();
+            int[] focusModes = info.get(CameraCharacteristics.CONTROL_AF_AVAILABLE_MODES);
+            int focusMode = focusModes != null && Arrays.stream(focusModes).anyMatch(mode -> mode == CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE)
+                ? CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE : CaptureRequest.CONTROL_AF_MODE_OFF;
             int sensor = info.get(CameraCharacteristics.SENSOR_ORIENTATION);
             int rotation = activity.getWindowManager().getDefaultDisplay().getRotation();
             int degrees = rotation == Surface.ROTATION_90 ? 90 : rotation == Surface.ROTATION_180 ? 180 : rotation == Surface.ROTATION_270 ? 270 : 0;
             int orientation = (sensor - degrees + 360) % 360;
             reader = ImageReader.newInstance(size.getWidth(), size.getHeight(), ImageFormat.JPEG, 1);
+            // Brief, discarded frames let the sensor meter the scene before the single JPEG.
+            meteringReader = ImageReader.newInstance(meteringSize.getWidth(), meteringSize.getHeight(), ImageFormat.YUV_420_888, 2);
+            meteringReader.setOnImageAvailableListener(source -> {
+                if (current != generation) return;
+                try (Image ignored = source.acquireLatestImage()) {}
+                catch (Exception exception) { fail.accept("Camera metering failed: " + exception.getMessage()); }
+            }, handler);
             reader.setOnImageAvailableListener(source -> {
                 if (current != generation) return;
                 try {
@@ -94,17 +109,48 @@ final class SnapshotCamera {
                     if (current != generation) { opened.close(); return; }
                     camera = opened;
                     try {
-                        opened.createCaptureSession(Collections.singletonList(reader.getSurface()), new CameraCaptureSession.StateCallback() {
+                        opened.createCaptureSession(Arrays.asList(reader.getSurface(), meteringReader.getSurface()), new CameraCaptureSession.StateCallback() {
                             @Override public void onConfigured(CameraCaptureSession configured) {
                                 if (current != generation) { configured.close(); return; }
                                 session = configured;
                                 try {
-                                    CaptureRequest.Builder request = opened.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);
-                                    request.addTarget(reader.getSurface());
-                                    request.set(CaptureRequest.JPEG_ORIENTATION, 0);
-                                    configured.capture(request.build(), new CameraCaptureSession.CaptureCallback() {
-                                        @Override public void onCaptureFailed(CameraCaptureSession s, CaptureRequest r, CaptureFailure failure) { fail.accept("Camera capture failed"); }
+                                    long started = SystemClock.elapsedRealtime();
+                                    ExposureGate exposure = new ExposureGate();
+                                    Consumer<Boolean> takePhoto = settled -> {
+                                        if (current != generation || !exposure.claim(SystemClock.elapsedRealtime() - started, settled)) return;
+                                        handler.removeCallbacks(meteringTimeout);
+                                        try {
+                                            CaptureRequest.Builder request = opened.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);
+                                            request.addTarget(reader.getSurface());
+                                            request.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO);
+                                            request.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON);
+                                            request.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_AUTO);
+                                            request.set(CaptureRequest.CONTROL_AF_MODE, focusMode);
+                                            request.set(CaptureRequest.JPEG_ORIENTATION, 0);
+                                            configured.stopRepeating();
+                                            configured.capture(request.build(), new CameraCaptureSession.CaptureCallback() {
+                                                @Override public void onCaptureFailed(CameraCaptureSession s, CaptureRequest r, CaptureFailure failure) { fail.accept("Camera capture failed"); }
+                                            }, handler);
+                                        } catch (Exception exception) { fail.accept("Capture failed: " + exception.getMessage()); }
+                                    };
+                                    meteringTimeout = () -> takePhoto.accept(false);
+                                    CaptureRequest.Builder preview = opened.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
+                                    preview.addTarget(meteringReader.getSurface());
+                                    preview.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO);
+                                    preview.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON);
+                                    preview.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_AUTO);
+                                    preview.set(CaptureRequest.CONTROL_AF_MODE, focusMode);
+                                    configured.setRepeatingRequest(preview.build(), new CameraCaptureSession.CaptureCallback() {
+                                        @Override public void onCaptureCompleted(CameraCaptureSession s, CaptureRequest r, TotalCaptureResult result) {
+                                            Integer ae = result.get(CaptureResult.CONTROL_AE_STATE);
+                                            Integer awb = result.get(CaptureResult.CONTROL_AWB_STATE);
+                                            boolean settled = Integer.valueOf(CaptureResult.CONTROL_AE_STATE_CONVERGED).equals(ae)
+                                                || Integer.valueOf(CaptureResult.CONTROL_AE_STATE_FLASH_REQUIRED).equals(ae);
+                                            takePhoto.accept(settled && (awb == null || Integer.valueOf(CaptureResult.CONTROL_AWB_STATE_CONVERGED).equals(awb)));
+                                        }
+                                        @Override public void onCaptureFailed(CameraCaptureSession s, CaptureRequest r, CaptureFailure failure) { fail.accept("Camera metering failed"); }
                                     }, handler);
+                                    handler.postDelayed(meteringTimeout, ExposureGate.MAX_WAIT_MS);
                                 } catch (Exception exception) { fail.accept(exception.getMessage()); }
                             }
                             @Override public void onConfigureFailed(CameraCaptureSession failed) { failed.close(); fail.accept("Camera configuration failed"); }

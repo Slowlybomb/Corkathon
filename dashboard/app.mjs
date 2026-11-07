@@ -3,15 +3,18 @@ import { findingsForLayer, retainSelection } from './survey.mjs';
 import { createFieldMap } from './map.mjs';
 import { normaliseFeed, coordinatesFor, demoArea } from './geo.mjs';
 import { loadScene, loadSceneLayer } from './scene.mjs';
+import { createDroneTelemetry } from './drone-telemetry.mjs';
 
 const $ = selector => document.querySelector(selector);
 const survey = {name:'Cork survey area',source:null,illustrative:false,duration:0,route:[],findings:[]};
 let selected = survey.findings[0]?.id, layer = 'all', elapsed = 0, playing = false, speed = 1, previousFrame = 0;
 let socket = null, toastTimer,animationFrame=0,analysisState=null;
 let scenePackage=null,sceneRequest=0,sceneController=null,cameraEvidence=null;
+let droneTelemetry=null,phoneConnected=false;
 const formatTime = value => `${String(Math.floor(value/60)).padStart(2,'0')}:${String(Math.floor(value%60)).padStart(2,'0')}`;
 const escape = value => String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const map = createFieldMap($('#map'),survey,selectFinding,message=>{const notice=$('#map-notice');notice.hidden=!message;notice.textContent=message??'';},updateBasemapUi,updateAnalysisUi,inspectCell);
+const dronePanel=createDroneTelemetry($('#drone-telemetry'));
 
 function renderFindings(){
   const findings=findingsForLayer(survey.findings,layer);
@@ -147,6 +150,7 @@ document.addEventListener('pointerdown',event=>{if(!setup.hidden&&!setup.contain
 function connectionStatus(message,label,state=''){$('#connection-status').textContent=message;$('#connection-label').textContent=label;$('#connection-dot').className=`status-dot ${state}`;}
 function cancelSceneLoad(){sceneRequest++;sceneController?.abort();sceneController=null;$('#scene-layer').disabled=false;}
 function applySurvey(value){
+  if(value.illustrative)dronePanel.hide();
   Object.assign(survey,{scene:null},value);selected=survey.findings[0]?.id;playing=false;elapsed=0;layer='all';
   $('#layers').querySelectorAll('button').forEach(button=>{const active=button.dataset.layer==='all';button.classList.toggle('active',active);button.setAttribute('aria-pressed',active);button.querySelector('.layer-check')?.remove();if(active){const check=document.createElement('span');check.className='layer-check';check.textContent='✓';button.append(check);}});
   map.setSurvey(survey);renderFindings();updateReplay();
@@ -178,9 +182,11 @@ async function loadSatellite(loaded,name){
 $('#scene-layer').onchange=()=>{if(scenePackage)loadSatellite(scenePackage,$('#scene-layer').value);};
 window.addEventListener('phone-image',event=>{
   cameraEvidence=event.detail;$('#camera-evidence-image').src=cameraEvidence.src;
-  $('#camera-evidence-caption').textContent=`Stationary capture · ${cameraEvidence.capturedAt?new Date(cameraEvidence.capturedAt).toLocaleString():'capture time unavailable'} · location not attached`;
-  $('#camera-evidence').hidden=false;$('#export').disabled=false;showToast('Camera still received · location not attached');
+  $('#camera-evidence-caption').textContent=`Stationary capture · ${cameraEvidence.capturedAt?new Date(cameraEvidence.capturedAt).toLocaleString():'capture time unavailable'} · ${cameraEvidence.location?`phone GPS ${cameraEvidence.location.latitude.toFixed(6)}, ${cameraEvidence.location.longitude.toFixed(6)} · ±${Math.round(cameraEvidence.location.accuracyM)} m`:'location not attached'}`;
+  $('#camera-evidence').hidden=false;$('#export').disabled=false;showToast(cameraEvidence.location?'Camera still received · phone GPS attached':'Camera still received · location not attached');
 });
+window.addEventListener('phone-telemetry',event=>{droneTelemetry=event.detail;map.setTelemetry(droneTelemetry);dronePanel.setSample(droneTelemetry);});
+window.addEventListener('phone-locate',()=>map.locateDrone());
 function receiveObservations(message,source){
   const findings=normaliseFeed(message);
   if(!findings.length)return false;
@@ -192,6 +198,8 @@ window.addEventListener('phone-observations',event=>{
   if(receiveObservations(event.detail,'Bluetooth camera module')&&socket){socket.onclose=null;socket.close();socket=null;}
 });
 window.addEventListener('phone-link-state',event=>{
+  droneTelemetry=null;if(event.detail.connected||phoneConnected){map.setTelemetry(null);dronePanel.setConnection(event.detail.connected);}phoneConnected=event.detail.connected;
+  if(event.detail.connected&&survey.illustrative)applySurvey({findings:[],route:[],duration:0,name:'Camera module',source:'Bluetooth camera module',illustrative:false});
   if(!event.detail.connected&&survey.source==='Bluetooth camera module')connectionStatus('Bluetooth disconnected. Last observations retained.','Disconnected','failed');
 });
 $('#connection-form').onsubmit=event=>{

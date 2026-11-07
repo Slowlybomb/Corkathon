@@ -1,7 +1,20 @@
 import { createPhoneLink, cameraImageEvidence } from './phone.mjs';
+import { readTelemetry, telemetryAt } from './telemetry.mjs';
 
 const $=selector=>document.querySelector(selector);
 let connected=false,pending=null,timer,bytes=0,receiving=false;
+let telemetry=null;
+const sensorStates={off:'Enable sharing on the phone',permission_required:'Allow precise location on the phone',disabled:'Turn on phone location',unavailable:'Sensor unavailable',searching:'Waiting for a reading',stale:'Reading expired',unreliable:'Compass unreliable · move away from metal'};
+function renderTelemetry(){
+  const current=telemetryAt(telemetry),position=current.location,orientation=current.orientation;
+  $('#phone-gps').textContent=position?`${position.latitude.toFixed(6)}, ${position.longitude.toFixed(6)} · ±${Math.round(position.accuracyM)} m`:connected?(telemetry?.location?'GPS fix expired':sensorStates[telemetry?.gpsState]??'Waiting for phone GPS'):'Disconnected';
+  $('#phone-altitude').textContent=position?.altitudeM!=null?`${position.altitudeM.toFixed(1)} m (WGS84)${position.altitudeAccuracyM!=null?` · ±${position.altitudeAccuracyM.toFixed(0)} m`:''}`:'Unavailable';
+  $('#phone-speed').textContent=position?.speedMps!=null?`${position.speedMps.toFixed(1)} m/s`:'Unavailable';
+  $('#phone-orientation').textContent=orientation?`${orientation.headingDeg==null?'Heading unavailable':`${orientation.headingDeg.toFixed(0)}° ${orientation.declinationDeg==null?'magnetic':'true'}`} · ${orientation.accuracy} accuracy`:connected?(telemetry?.orientation?'Orientation expired':sensorStates[telemetry?.orientationState]??'Waiting for phone orientation'):'Disconnected';
+  $('#phone-tilt').textContent=orientation?`Pitch ${orientation.pitchDeg?.toFixed(0)??'—'}° · roll ${orientation.rollDeg?.toFixed(0)??'—'}°`:'Unavailable';
+  $('#phone-locate').disabled=!position||Math.abs(position.latitude)>85;
+}
+setInterval(renderTelemetry,1000);
 const log=message=>{
   const item=document.createElement('li');item.textContent=`${new Date().toLocaleTimeString()}  ${String(message).slice(0,500)}`;
   $('#phone-log').prepend(item);while($('#phone-log').children.length>50)$('#phone-log').lastChild.remove();
@@ -11,6 +24,8 @@ function failed(error){const message=error.message??String(error);$('#phone-stat
 const link=createPhoneLink({
   onState(state,name){
     connected=state==='connected';
+    if(!connected)telemetry=null;
+    renderTelemetry();
     $('#phone-status').textContent=({disconnected:'Disconnected. Start Bluetooth in the Android app.',connecting:'Choose the camera module in the Bluetooth device picker…',authenticating:'Checking the camera module connection code…',connected:`Connected to ${name??'camera module'} over Bluetooth LE.`})[state];
     $('#phone-dot').className=`status-dot ${connected?'connected':''}`;
     $('#phone-connect').disabled=state!=='disconnected';$('#phone-pin').disabled=state!=='disconnected';
@@ -25,7 +40,7 @@ const link=createPhoneLink({
     if(!pending||!receiving)return;bytes+=count;
     $('#phone-request-status').textContent=`Receiving packet · ${(bytes/1024).toFixed(1)} kB received. Image appears when transfer finishes.`;
   },
-  onPacket(packet){
+  onPacket(packet,transitMs){
     if(packet.v!==1){log('Ignored unsupported packet version');return;}
     switch(packet.type){
       case 'ready':log('Camera module code accepted');break;
@@ -36,13 +51,18 @@ const link=createPhoneLink({
         $('#phone-link-mode').textContent=packet.simulatedBps===1000?'BLE · simulated 1 kbit/s limit':'Bluetooth LE · no LoRa simulation';
         break;
       case 'pong':log('Camera module responded');break;
+      case 'telemetry':{
+        const sample=readTelemetry(packet,Date.now(),transitMs);if(!sample){log('Ignored invalid sensor packet');break;}
+        telemetry=sample;renderTelemetry();
+        window.dispatchEvent(new CustomEvent('phone-telemetry',{detail:sample}));break;
+      }
       case 'ack':if(packet.id===pending){receiving=true;$('#phone-request-status').textContent='Camera module accepted the image request. Capturing and transferring…';}break;
       case 'image':{
         if(packet.id!==pending){log('Ignored image from a cancelled or expired request');break;}
         const image=cameraImageEvidence(packet);
         if(!image){finish('Camera module returned an invalid image.');break;}
         $('#phone-image').src=image.src;$('#phone-image-wrap').hidden=false;
-        $('#phone-image-caption').textContent=`Stationary camera module capture · ${image.capturedAt?new Date(image.capturedAt).toLocaleString():'capture time unavailable'} · location not attached`;
+        $('#phone-image-caption').textContent=`Stationary camera module capture · ${image.capturedAt?new Date(image.capturedAt).toLocaleString():'capture time unavailable'} · ${image.location?`phone GPS ±${Math.round(image.location.accuracyM)} m`:'location not attached'}`;
         window.dispatchEvent(new CustomEvent('phone-image',{detail:image}));
         finish('Image received. Camera is released after capture; this is a still image.');log('Image received');break;
       }
@@ -55,6 +75,7 @@ const link=createPhoneLink({
 });
 $('#phone-form').onsubmit=async event=>{event.preventDefault();try{await link.connect($('#phone-pin').value.trim());}catch(error){failed(error);}};
 $('#phone-disconnect').onclick=()=>link.disconnect();
+$('#phone-locate').onclick=()=>window.dispatchEvent(new Event('phone-locate'));
 $('#phone-ping').onclick=()=>link.send('ping').catch(failed);
 $('#phone-capture').onclick=async()=>{
   $('#phone-capture').disabled=true;bytes=0;receiving=false;

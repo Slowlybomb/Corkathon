@@ -82,6 +82,7 @@ Use Manrope with the declared local fallbacks. Short, sentence-case labels take 
 - Upper-right floating observation module: a short list and selected finding details.
 - A floating Map/Satellite control, plus lower-right projection and zoom controls.
 - Bottom replay module, inset from viewport edges, with a small source credit below.
+- While a phone is connected, a bottom Drone telemetry module shows pitch, roll, heading, GPS, and a Three.js attitude preview. The preview works independently of GPS; map placement requires a fresh phone fix. Zero pitch and roll show a level model. This module replaces sample replay and uses the same floating surface.
 
 Ithir opens with an empty workspace and a connection action. The sample survey is optional under Data source. Hide layers until observations arrive, the intensity legend without supporting numeric data, and replay without a route. Export belongs beside the observations. Keep the Ithir name visible on small screens and omit fixed survey dates and duplicate map-context labels.
 

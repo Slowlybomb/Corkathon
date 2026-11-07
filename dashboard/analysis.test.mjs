@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildAnalysis, valueColor } from './analysis.mjs';
-import { survey } from './sample-data.mjs';
 import { normaliseFeed } from './geo.mjs';
 
 test('unvalued live findings never produce a synthetic analysis surface',()=>{
@@ -34,12 +33,14 @@ test('different metrics are not silently combined into one colour scale',()=>{
   assert.match(result.note,/metric/);
 });
 
-test('sample cell size changes resolution and empty layers stay unassessed',()=>{
-  const fine=buildAnalysis(survey,'coverage',60),coarse=buildAnalysis(survey,'coverage',140);
-  assert.ok(fine.cells.length>coarse.cells.length);
-  assert.ok(coarse.cells.length>0);
-  assert.ok(fine.cells.every(cell=>Number.isFinite(cell.position[0])&&cell.value>=0&&cell.value<=1));
-  assert.deepEqual(buildAnalysis(survey,'soil',80).cells,[]);
+test('legacy illustrative flags cannot generate numeric data for unassessed observations',()=>{
+  const survey={illustrative:true,findings:[{id:'old',layer:'coverage',x:500,y:450,latitude:51.95,longitude:-8.22}]};
+  assert.deepEqual(buildAnalysis(survey,'coverage',80).cells,[]);
+});
+
+test('values without geographic positions cannot appear on the map',()=>{
+  const survey={findings:[{id:'old',x:500,y:450,value:100}]};
+  assert.deepEqual(buildAnalysis(survey,'all').cells,[]);
 });
 
 test('colour ramp clamps to the approved endpoints',()=>{

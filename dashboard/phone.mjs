@@ -1,3 +1,5 @@
+import { readLocation } from './telemetry.mjs';
+
 export const SERVICE='aa7a0001-7f6b-4c80-9f55-477f39b00001';
 export const RX='aa7a0002-7f6b-4c80-9f55-477f39b00001';
 export const TX='aa7a0003-7f6b-4c80-9f55-477f39b00001';
@@ -6,12 +8,12 @@ export function cameraImageEvidence(packet){
   if(packet?.v!==1||packet.type!=='image'||typeof packet.id!=='string'||!packet.id||packet.mime!=='image/jpeg'||
     typeof packet.base64!=='string'||packet.base64.length>44000||!/^\/9j\/[A-Za-z0-9+/]*={0,2}$/.test(packet.base64))return null;
   const capturedAt=typeof packet.capturedAt==='number'&&packet.capturedAt>0&&Number.isFinite(new Date(packet.capturedAt).getTime())?packet.capturedAt:null;
-  return {id:packet.id,src:`data:image/jpeg;base64,${packet.base64}`,mime:packet.mime,capturedAt,location:null};
+  return {id:packet.id,src:`data:image/jpeg;base64,${packet.base64}`,mime:packet.mime,capturedAt,location:readLocation(packet.location)};
 }
 
 // Byte framing keeps split UTF-8 characters intact. Discard overflow through the next newline.
-export function createPacketReader(onPacket,onError=()=>{},limit=65536){
-  let bytes=[],discard=false;
+export function createPacketReader(onPacket,onError=()=>{},limit=65536,now=()=>performance.now()){
+  let bytes=[],discard=false,started=null;
   return value=>{
     const data=new Uint8Array(value.buffer,value.byteOffset,value.byteLength);
     for(const byte of data){
@@ -20,10 +22,11 @@ export function createPacketReader(onPacket,onError=()=>{},limit=65536){
           let packet;
           try{packet=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(Uint8Array.from(bytes)));if(!packet||typeof packet!=='object'||Array.isArray(packet))throw new Error();}
           catch{packet=null;onError('Invalid camera module packet.');}
-          if(packet)onPacket(packet);
+          if(packet)onPacket(packet,Math.max(0,now()-started));
         }
-        bytes=[];discard=false;
+        bytes=[];discard=false;started=null;
       }else if(!discard){
+        if(!bytes.length)started=now();
         bytes.push(byte);
         if(bytes.length>limit){bytes=[];discard=true;onError('Camera module packet exceeded the size limit.');}
       }
@@ -63,9 +66,9 @@ export function createPhoneLink({bluetooth=globalThis.navigator?.bluetooth,onSta
       const receive=await service.getCharacteristic(TX),transmit=await service.getCharacteristic(RX);
       if(session!==epoch){if(chosen.gatt.connected)chosen.gatt.disconnect();return;}
       tx=receive;rx=transmit;
-      reader=createPacketReader(packet=>{
+      reader=createPacketReader((packet,transitMs)=>{
         if(packet.v===1&&packet.type==='ready'){ready=true;clearTimeout(authTimer);onState('connected',chosen.name);}
-        onPacket(packet);
+        onPacket(packet,transitMs);
       },onError);
       tx.addEventListener('characteristicvaluechanged',notify);await tx.startNotifications();
       if(session!==epoch)return;
